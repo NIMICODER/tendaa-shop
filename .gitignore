@@ -30,6 +30,13 @@ secrets.json
 media/
 uploads/
 
+# Frontend (web/) build output and caches
+node_modules/
+web/dist/
+web/.vite/
+*.tsbuildinfo
+src/Tendaa.Web/wwwroot/
+
 # OS
 .DS_Store
 Thumbs.db

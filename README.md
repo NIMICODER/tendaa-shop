@@ -13,6 +13,9 @@ during the hackathon.
 - What it does: [SPEC.md](SPEC.md)
 - How it's built: [ARCHITECTURE.md](ARCHITECTURE.md)
 - Build plan: [PLAN.md](PLAN.md)
+- Seller dashboard: a React app in [`web/`](web/) (Vite + TypeScript), talking to a REST API and
+  SignalR hub in `Tendaa.Web`. See ARCHITECTURE.md's "Seller dashboard" section for how it fits
+  together, and "Deployment" for the two run modes (dev: two processes; prod: one).
 
 ## Configuration
 

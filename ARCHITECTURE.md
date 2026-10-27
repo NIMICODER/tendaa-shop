@@ -30,10 +30,12 @@ flowchart LR
         P --> MP[Media pipeline<br/>transcribe, classify, extract]
         P --> AR[Agent runner]
         AR --> T[Agent tools]
-        D[Seller dashboard<br/>Blazor Server]
+        API[Dashboard REST API<br/>/api, cookie auth + antiforgery]
+        HUB[SignalR hub<br/>/hubs/dashboard]
+        STATIC[Static files<br/>built React app + SPA fallback]
     end
     T --> S[Domain services<br/>Tendaa.Core]
-    D --> S
+    API --> S
     S --> DB[(PostgreSQL)]
     P --> DB
     MP --> META[Meta Model API<br/>Muse Spark, Voice Transcribe]
@@ -41,15 +43,25 @@ flowchart LR
     P -- replies --> WAC[WhatsApp client]
     S -- notifications --> WAC
     WAC --> WA
-    SELLER[Seller] <--> D
+    S -. new order / handoff .-> HUB
+    SELLER[Seller] <--> BROWSER[React dashboard<br/>web/]
+    BROWSER -- fetch /api --> API
+    BROWSER -- WebSocket --> HUB
+    STATIC -. serves in prod .-> BROWSER
 ```
+
+In development, `web/` runs under the Vite dev server on its own port and proxies `/api`, `/hubs`
+and `/webhooks` to the ASP.NET Core port, so the dashboard gets hot reload without losing access to
+the backend. In production there is one process: `Tendaa.Web` serves the built React app from
+`wwwroot` with a fallback to `index.html` for client-side routes.
 
 | Project | Responsibility | Depends on |
 |---|---|---|
 | `Tendaa.Core` | Entities, order state machine, totals, delivery fees, payment verification rules, domain services, interfaces (`IWhatsAppSender`, `IMediaStore`, ...) | nothing |
 | `Tendaa.Agent` | Agent factory, instructions, tools, request context, media pipeline (transcriber, image classifier, receipt extractor, product matcher, price list extractor) | Core, Microsoft.Agents.AI, OpenAI SDK |
 | `Tendaa.Infrastructure` | EF Core DbContext, migrations, repositories, WhatsApp Graph API client, media storage | Core |
-| `Tendaa.Web` | Webhook endpoints, inbound queue + processor, Blazor dashboard, auth, DI wiring, config | all |
+| `Tendaa.Web` | Webhook endpoints, inbound queue + processor, dashboard REST API (`/api`) + SignalR hub, static hosting of the built React app, auth, DI wiring, config | all |
+| `web/` (`Tendaa.Web.Client`) | React dashboard SPA: pages, typed API client generated from `Tendaa.Web`'s OpenAPI document, SignalR connection for live updates | Vite, React, TypeScript, React Router, TanStack Query, Tailwind CSS, shadcn/ui |
 | `Tendaa.Evals` (`evals/`) | Console app that runs the eval set against the real model | Agent, Core |
 
 ## Inbound message flow
@@ -195,11 +207,27 @@ pair is unit tested, including the forbidden ones.
 
 ## Seller dashboard
 
-Blazor Server in `Tendaa.Web`, calling Core services in process. Cookie auth with an admin password
-for the MVP. Pages: Orders board, Order detail (receipt beside extracted fields, Confirm/Reject),
-Conversations (thread + trace), Handoffs (reply via WhatsApp, resolve), Catalog (edit + price list
-import), Settings (shop details, zones, rules). New orders and handoffs appear live through Blazor's
-SignalR connection.
+A React SPA in `web/` (`Tendaa.Web.Client`), served as static files by `Tendaa.Web` in production
+and by the Vite dev server in development (proxying `/api`, `/hubs` and `/webhooks` to the ASP.NET
+Core port). It talks to a REST API under `/api` in `Tendaa.Web`, which calls Core services
+in process — same process, same database, just a typed HTTP boundary instead of direct component
+binding.
+
+**Typed client, no hand-written request types.** `Tendaa.Web` exposes its OpenAPI document via
+`Microsoft.AspNetCore.OpenApi`. `web/` generates a client from that document with
+[Orval](https://orval.dev), including TanStack Query hooks, so page code calls generated hooks
+(`useGetOrders()`, `useConfirmOrder()`, ...) instead of hand-rolled `fetch` calls or hand-written
+request/response types. Orval was chosen over `openapi-typescript` because it generates the
+React Query hooks directly from the spec (we already committed to TanStack Query), which is less
+glue code to write and keep in sync during a time-boxed build; the trade-off is a heavier
+generator and more generated surface than a types-only tool.
+
+Cookie auth with an admin password for the MVP; antiforgery tokens on state-changing requests.
+Pages: Orders board, Order detail (receipt beside extracted fields, Confirm/Reject), Conversations
+(thread + trace), Handoffs (reply via WhatsApp, resolve), Catalog (edit + price list import),
+Settings (shop details, zones, rules). New orders and handoffs appear live through a SignalR
+connection (`@microsoft/signalr`) to a hub in `Tendaa.Web`; polling is the fallback if the
+connection drops.
 
 ## Outbound messages
 
@@ -212,7 +240,9 @@ post-hackathon feature).
 
 Typed options with `ValidateOnStart`: `MetaModel`, `WhatsApp`, `Dashboard`, `ConnectionStrings`.
 Development: `dotnet user-secrets`. Production: environment variables. Model names are config so
-contributor and standard modes switch without code changes.
+contributor and standard modes switch without code changes. The frontend (`web/`) holds no
+secrets: `web/.env*` only ever has public values like the API base path, and in production that's
+usually unset because the SPA and API share an origin.
 
 ## Security
 
@@ -221,6 +251,9 @@ contributor and standard modes switch without code changes.
 - Tools get identity from the request context only; EF filters enforce shop isolation.
 - Prompt injection: image and voice content reaches the agent only as structured fields; agent
   instructions state that customer content never changes its rules; evals include injection cases.
+- Dashboard: same-origin cookie auth (admin password for the MVP); antiforgery tokens required on
+  state-changing `/api` requests; `[Authorize]` on every `/api` and hub route. No JWT and no CORS
+  in production, since the SPA is served from the same origin as the API.
 - No secrets or real phone numbers in the repo; the repo is public.
 - Personal data (names, phones, addresses) is kept to what orders need. While on free API credits,
   only demo and role-play data is sent to the model.
@@ -231,15 +264,23 @@ contributor and standard modes switch without code changes.
 |---|---|---|
 | Unit | State machine, totals, delivery fees, `PaymentVerifier`, tools | xUnit, in-memory fakes |
 | Agent loop | Tool calling end to end without the real API | OpenAI SDK with a fake `HttpClient` transport returning scripted completions |
-| Web | Webhook verify, signature, dedupe, ordering | `WebApplicationFactory`, Testcontainers or Docker Postgres |
+| Web | Webhook verify, signature, dedupe, ordering, dashboard API auth | `WebApplicationFactory`, Testcontainers or Docker Postgres |
+| Frontend | Lint, strict type-check, build | `npm run lint`, `npm run build` (runs `tsc --noEmit` as part of the build) |
 | Evals | 25 to 30 real conversations against Muse Spark | `Tendaa.Evals` console, score table |
 
 ## Deployment
 
-One container (`Tendaa.Web`, with ffmpeg if voice notes need converting) plus managed PostgreSQL on
-Railway or DigitalOcean. Migrations run on startup in the demo environment. `/health` endpoint.
-WhatsApp webhook pointed at `https://<host>/webhooks/whatsapp`. Local development uses a
+A multi-stage Dockerfile: a Node stage runs `npm ci && npm run build` for `web/` and copies its
+output into `Tendaa.Web`'s `wwwroot`; a .NET stage publishes `Tendaa.Web` (with ffmpeg if voice
+notes need converting) on top of that, so the result is still one container. Plus managed
+PostgreSQL on Railway or DigitalOcean. Migrations run on startup in the demo environment. `/health`
+endpoint. WhatsApp webhook pointed at `https://<host>/webhooks/whatsapp`. Local development uses a
 cloudflared or ngrok tunnel.
+
+**Two run modes.** Development: two processes — `dotnet run` for `Tendaa.Web` (webhooks, dashboard
+API, hub) and `npm run dev` for `web/` (Vite, proxying `/api`, `/hubs`, `/webhooks` to the .NET
+port) — so the dashboard gets hot reload. Production: one process; `Tendaa.Web` serves the built
+React app as static files with an `index.html` fallback for client-side routes.
 
 ## Decisions and trade-offs
 
@@ -250,5 +291,5 @@ cloudflared or ngrok tunnel.
 | Receipt verification in code | Deterministic, auditable, can't be talked out of it | Letting the model judge the receipt |
 | Seller confirms every payment | Screenshots can be faked | Auto-confirm: unsafe without bank or Paystack verification |
 | Inbox table + Channel partitions | No lost messages, per-customer order, no extra infrastructure | Azure Service Bus / RabbitMQ: overkill for the MVP |
-| Blazor Server in the same host | One deployable, all C#, fast to build | Separate React app + API: second language and deployment |
+| React SPA (`web/`) + REST API, same repo/host | A dashboard UI I can grow into a real product after the hackathon, with the component and hiring ecosystem that implies; still one deployable via a multi-stage Docker build | Blazor Server: one language, less to build during the hackathon — but trading that build-time simplicity for a weaker long-term base for the dashboard. Honest cost of the choice made: a second stack, a REST API surface to design and test, and generated-client plumbing that Blazor would not have needed |
 | ShopId everywhere now | Multi-tenant later without migration pain | Single-tenant schema |

@@ -36,11 +36,16 @@ Most Viral and Community Vote prizes).
 - Typed options for `MetaModel`, `WhatsApp`, `Dashboard` with `ValidateOnStart`. User-secrets on
   `Tendaa.Web`. README section listing every config key.
 - A `/dev/ping-model` endpoint (Development only) that sends one message to Muse Spark.
-- GitHub Actions: build + test on push.
+- `web/` scaffold: Vite + React + TypeScript (strict), ESLint + Prettier. React Router and
+  TanStack Query installed but unused until Phase 5. Vite dev server proxies `/api`, `/hubs` and
+  `/webhooks` to the ASP.NET Core app. One page calls a `/api/health` endpoint on `Tendaa.Web` to
+  prove the proxy works end to end.
+- GitHub Actions: build + test on push (.NET); lint + build for `web/`.
 - `BUILDLOG.md` started.
 
 **Done when:** `dotnet build` has zero warnings, `dotnet test` passes, Postgres runs in Docker,
-the ping endpoint returns a Muse Spark reply, CI is green.
+the ping endpoint returns a Muse Spark reply, `npm run build` in `web/` succeeds and its one page
+shows the proxied `/api/health` response in the browser, CI is green.
 
 ## Phase 1: Domain and data
 **Goal:** the business model is correct before any AI touches it.
@@ -117,16 +122,39 @@ screenshot; a price list photo produces editable drafts. Tests use recorded fake
 
 **Interview prep:** Why is the comparison done in code, not by the model? Why never auto-confirm?
 
-## Phase 5: Seller dashboard (Blazor Server)
-- Simple login (admin password from config, cookie auth).
-- Orders board by status; order page with receipt image beside extracted fields; Confirm / Reject
-  with reason; customer notified via WhatsApp.
-- Conversations: thread view, expandable trace per reply (tools, results, transcript).
-- Handoff inbox: summary, reply box (sends via WhatsApp), resolve.
-- Catalog: list/edit products, price list import with review step.
-- Deploy (Railway or DigitalOcean) and point the webhook at it.
-**Done when:** flow F works from the dashboard; a handoff can be answered and resolved; a real
-seller can use it on the deployed URL.
+## Phase 5: Dashboard API + React dashboard
+**Goal:** the seller can confirm payments, answer handoffs and edit the catalog from a browser,
+backed by the same Core rules the agent uses — no second set of business logic.
+- Dashboard REST API in `Tendaa.Web` under `/api`: cookie login (admin password from config),
+  antiforgery on state-changing requests, `[Authorize]` on every `/api` route. Endpoints: orders
+  (list by status, detail, confirm, reject with reason), conversations (thread + trace), handoffs
+  (list, reply via WhatsApp, resolve), catalog (list/edit products, price list import review),
+  settings (shop, zones, rules).
+- `Microsoft.AspNetCore.OpenApi` document for `/api`; generate the `web/` client with Orval
+  (types + TanStack Query hooks) from it. No hand-written request/response types.
+- SignalR hub (`/hubs/dashboard`) in `Tendaa.Web`; domain services publish to it on new order and
+  new handoff. `web/` connects with `@microsoft/signalr`; polling is the fallback if the
+  connection drops.
+- React pages, in build order: Orders board -> Order detail (receipt beside extracted fields,
+  Confirm/Reject) -> Handoff inbox (reply, resolve) -> Conversations (thread + trace) -> Catalog
+  (edit + price list import) -> Settings.
+- Production build: `npm ci && npm run build` into `Tendaa.Web`'s `wwwroot`; multi-stage
+  Dockerfile (Node build stage, then .NET publish). Deploy (Railway or DigitalOcean) and point the
+  webhook at it.
+
+**Done when:** flow F works from the dashboard; a handoff can be answered and resolved; `npm run
+lint` and `npm run build` pass; a real seller can use it on the deployed URL.
+
+**Schedule reality check:** this phase grew. A REST API layer, a generated client, a SignalR hub
+and six pages is more work than the original single-stack Blazor plan, in the same two days (Sun
+Nov 1 through part of Mon Nov 2) before Phase 6 needs the rest of Monday. Tue Nov 3 is README +
+demo video, not slack — the only real buffer is Wed Nov 4 before the submission deadline. So if
+Sunday runs long, cut dashboard *pages* in this order, on top of the existing feature cut order at
+the top of this file, before touching Nov 3 at all: Settings -> Catalog/price-list import UI ->
+Conversations trace viewer -> Handoff inbox UI. Orders board, Order detail and Confirm/Reject are
+not cuttable — they're the one dashboard moment in the demo story (flow F, 2:25). If Monday is
+still tight after cutting every cuttable page, that's a sign to flag the trade-off live rather
+than silently eating into Tuesday or Wednesday — evals (Phase 6) are judged too.
 
 ## Phase 6: Evals and hardening
 - `evals/` with 25 to 30 cases: questions, orders, corrections, out of stock, Pidgin, off-topic,
