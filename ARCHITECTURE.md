@@ -1,0 +1,254 @@
+# Architecture
+
+How Tendaa is built, and why. Read with `SPEC.md` (what it does) and `PLAN.md` (build order).
+
+## Principles
+
+1. **The model talks; the code decides.** Prices, totals, stock, order status and payment checks
+   are computed in C#. The model chooses tools and writes replies. It never sets a price or
+   confirms a payment.
+2. **One agent, small focused model calls around it.** A single conversational agent handles the
+   chat with tools. Images and audio go through separate, single-purpose model calls (transcribe,
+   classify, extract) that return structured data. That keeps each step testable and stops text
+   inside an image from reaching the agent as instructions.
+3. **Never lose a message.** Every inbound WhatsApp event is saved before we return 200, and
+   processing can be retried after a crash.
+4. **One customer, one message at a time.** Messages from the same phone number are processed in
+   order; different customers run in parallel.
+5. **Multi-tenant from day one.** Every row has a `ShopId`. The MVP has one shop; going live
+   means adding onboarding, not rewriting.
+
+## Components
+
+```mermaid
+flowchart LR
+    C[Customer on WhatsApp] <--> WA[WhatsApp Cloud API]
+    WA -- webhook --> WH[Webhook endpoint]
+    subgraph Web[Tendaa.Web - one ASP.NET Core host]
+        WH --> Q[(Inbound queue<br/>Channel per partition)]
+        Q --> P[Message processor<br/>BackgroundService]
+        P --> MP[Media pipeline<br/>transcribe, classify, extract]
+        P --> AR[Agent runner]
+        AR --> T[Agent tools]
+        D[Seller dashboard<br/>Blazor Server]
+    end
+    T --> S[Domain services<br/>Tendaa.Core]
+    D --> S
+    S --> DB[(PostgreSQL)]
+    P --> DB
+    MP --> META[Meta Model API<br/>Muse Spark, Voice Transcribe]
+    AR --> META
+    P -- replies --> WAC[WhatsApp client]
+    S -- notifications --> WAC
+    WAC --> WA
+    SELLER[Seller] <--> D
+```
+
+| Project | Responsibility | Depends on |
+|---|---|---|
+| `Tendaa.Core` | Entities, order state machine, totals, delivery fees, payment verification rules, domain services, interfaces (`IWhatsAppSender`, `IMediaStore`, ...) | nothing |
+| `Tendaa.Agent` | Agent factory, instructions, tools, request context, media pipeline (transcriber, image classifier, receipt extractor, product matcher, price list extractor) | Core, Microsoft.Agents.AI, OpenAI SDK |
+| `Tendaa.Infrastructure` | EF Core DbContext, migrations, repositories, WhatsApp Graph API client, media storage | Core |
+| `Tendaa.Web` | Webhook endpoints, inbound queue + processor, Blazor dashboard, auth, DI wiring, config | all |
+| `Tendaa.Evals` (`evals/`) | Console app that runs the eval set against the real model | Agent, Core |
+
+## Inbound message flow
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant WA as WhatsApp Cloud API
+    participant WH as Webhook endpoint
+    participant DB as PostgreSQL
+    participant Q as Inbound queue
+    participant P as Processor
+    participant M as Meta Model API
+    WA->>WH: POST /webhooks/whatsapp
+    WH->>WH: Verify X-Hub-Signature-256 (HMAC, raw body)
+    WH->>DB: Insert InboundEvent (unique WhatsApp message id)
+    alt duplicate id
+        WH-->>WA: 200 (ignored)
+    else new
+        WH->>Q: Enqueue by hash(phone) partition
+        WH-->>WA: 200
+    end
+    Q->>P: Next event for this customer
+    P->>DB: Load Shop, Customer, Conversation
+    alt conversation handed off
+        P->>DB: Store message, notify seller, stop
+    else audio
+        P->>M: Transcribe voice note
+    else image
+        P->>M: Classify image (receipt / product / other)
+        P->>M: Extract fields or match catalog (structured output)
+        P->>P: Verify receipt in code (amount, date, reference)
+    end
+    P->>M: Run agent with text + structured media result + tools
+    M-->>P: Tool calls, then reply
+    P->>DB: Save messages, tool trace, session, order changes
+    P->>WA: Send reply, mark as read
+    P->>DB: Mark InboundEvent processed
+```
+
+**Crash safety.** `InboundEvent` has a status (`Pending`, `Processed`, `Failed`). On startup, the
+processor re-queues `Pending` events. Failed events retry up to 3 times, then show in the
+dashboard. This is an inbox pattern, the same idea as a transactional outbox in reverse.
+
+**Ordering.** The queue is N `Channel<InboundEvent>` partitions; each phone number always maps to
+the same partition and one worker reads each partition. Same customer: strictly in order.
+Different customers: parallel.
+
+**Status webhooks** (sent, delivered, read) are stored for the conversation view and otherwise
+ignored.
+
+## The agent
+
+One `AIAgent` built from the OpenAI .NET SDK `ChatClient` pointed at Meta Model API.
+
+**Request context.** Before each run, the processor fills a scoped `AgentRequestContext` with
+`ShopId`, `CustomerId`, `Phone`, and `ConversationId`. Tools read it from DI. The model never
+passes these as arguments, so it can't act on another customer's data.
+
+**Tools** (each a thin method over a domain service, returning small JSON-friendly results):
+
+| Tool | Does | Notes |
+|---|---|---|
+| `SearchProducts(query)` | Find products by name, category, colour | SQL, returns id, name, price, variants in stock |
+| `GetProductDetails(productId)` | Full details for one product | `NOT_FOUND` if missing |
+| `GetDeliveryFee(area)` | Zone + fee + delivery time for an area | Unknown area returns the zone list |
+| `GetShopInfo()` | Hours, rules, payment methods | Rules text from the seller |
+| `UpsertDraftOrder(items, customerName, area, address)` | Create or update the customer's draft order | Stock checked; returns missing fields |
+| `GetOrderSummary()` | Items, totals, delivery fee, grand total | Totals computed in Core |
+| `ConfirmOrderSummary()` | Draft to `AwaitingPayment`, returns bank details | Only after the customer said yes |
+| `GetMyOrders()` | This customer's recent orders and statuses | Never other customers' |
+| `RequestHandoff(reason, summary)` | Create a handoff, silence the agent on this chat | Seller notified |
+
+There is deliberately **no** tool to confirm payment, change prices, or give discounts.
+
+**Media results are context, not instructions.** After a receipt check or product match, the
+processor passes the result to the agent as a structured note (for example
+`[receipt_check: amount ₦38,500, matches order 1042, moved to PaymentReview]`). The raw text read
+from the image never goes into the agent's prompt.
+
+**Sessions.** One `AgentSession` per conversation, saved as JSON on the `Conversation` row
+(`SerializeSessionAsync` / `DeserializeSessionAsync`). History is trimmed to a token budget; order
+state lives in the database, not in chat history, so trimming never loses the order.
+
+**Trace.** Agent middleware records each tool call (name, arguments, result, duration) and the
+model's reply into `ToolTrace` rows linked to the assistant `Message`. The dashboard shows this as
+"why the agent said this".
+
+## Media pipeline
+
+| Step | Model call | Output | Then |
+|---|---|---|---|
+| Voice note | Muse Voice Transcribe | Transcript + language | Treated as the customer's text; transcript stored |
+| Image classify | Muse Spark, structured output | `receipt`, `product`, or `other`, with confidence | Routes to the next step |
+| Receipt extract | Muse Spark, structured output | amount, sender, bank, date, reference, confidence | `PaymentVerifier` in Core decides |
+| Product match | Muse Spark with the image + catalog list (id, name, colour, category) | Up to 3 product ids with confidence | Ids validated against the DB |
+| Price list (dashboard only) | Muse Spark, structured output | Draft products (name, price, variants) | Seller reviews before saving |
+
+`PaymentVerifier` (pure C#, fully unit tested) checks: amount equals the grand total, transfer date
+is after the order was created, the reference hasn't been used on another order, confidence is
+above a threshold. Any failure leaves the order in `AwaitingPayment` and records why. A pass moves
+it to `PaymentReview` only. `Confirmed` requires a seller actor (`OrderStateMachine` throws
+otherwise).
+
+Media files are downloaded from the Graph API (media id, then URL, then bytes with the access
+token) and stored through `IMediaStore`: local disk in development, object storage later.
+
+## Data model
+
+```mermaid
+erDiagram
+    SHOP ||--o{ PRODUCT : sells
+    PRODUCT ||--o{ PRODUCT_VARIANT : has
+    SHOP ||--o{ DELIVERY_ZONE : delivers_to
+    SHOP ||--o{ CUSTOMER : serves
+    CUSTOMER ||--o{ CONVERSATION : has
+    CONVERSATION ||--o{ MESSAGE : contains
+    MESSAGE ||--o{ TOOL_TRACE : explains
+    CUSTOMER ||--o{ ORDER : places
+    ORDER ||--o{ ORDER_ITEM : contains
+    ORDER_ITEM }o--|| PRODUCT_VARIANT : of
+    ORDER ||--o{ PAYMENT_PROOF : has
+    CONVERSATION ||--o{ HANDOFF : raises
+    SHOP ||--o{ INBOUND_EVENT : receives
+```
+
+Key fields:
+- `Shop`: name, country, currency, time zone, hours, rules text, bank name, account number, account name, WhatsApp phone number id.
+- `ProductVariant`: size/colour, stock, optional price override. Money is `decimal` in the shop's currency (`Shop.Currency`, NGN for the demo).
+- `Order`: number (human friendly, per shop), status, item total, delivery fee, grand total,
+  zone, address, timestamps per status, `ConfirmedBy`.
+- `PaymentProof`: media id, extracted fields (JSON), verification result, reasons, reviewed by.
+- `Message`: direction, type (text, audio, image), text or transcript, media id, WhatsApp id.
+- `InboundEvent`: WhatsApp message id (unique), raw payload, status, attempts, error.
+
+EF Core global query filters scope every query by the current `ShopId`.
+
+## Order state machine
+
+Defined in `Tendaa.Core.Orders.OrderStateMachine` (see SPEC.md for the diagram). Transitions carry an
+actor (`Customer`, `Agent`, `Seller`, `System`). Allowed transitions are a table in code and every
+pair is unit tested, including the forbidden ones.
+
+## Seller dashboard
+
+Blazor Server in `Tendaa.Web`, calling Core services in process. Cookie auth with an admin password
+for the MVP. Pages: Orders board, Order detail (receipt beside extracted fields, Confirm/Reject),
+Conversations (thread + trace), Handoffs (reply via WhatsApp, resolve), Catalog (edit + price list
+import), Settings (shop details, zones, rules). New orders and handoffs appear live through Blazor's
+SignalR connection.
+
+## Outbound messages
+
+`IWhatsAppSender` sends text (and later templates). Seller actions (confirm, reject, handoff reply)
+send through it. The 24-hour customer service window is checked from the customer's last inbound
+message; outside it, the MVP shows a warning in the dashboard instead of sending (templates are a
+post-hackathon feature).
+
+## Configuration and secrets
+
+Typed options with `ValidateOnStart`: `MetaModel`, `WhatsApp`, `Dashboard`, `ConnectionStrings`.
+Development: `dotnet user-secrets`. Production: environment variables. Model names are config so
+contributor and standard modes switch without code changes.
+
+## Security
+
+- Webhook signature verified with a constant-time compare; unsigned or invalid requests get 401.
+- Verify token checked on the GET challenge.
+- Tools get identity from the request context only; EF filters enforce shop isolation.
+- Prompt injection: image and voice content reaches the agent only as structured fields; agent
+  instructions state that customer content never changes its rules; evals include injection cases.
+- No secrets or real phone numbers in the repo; the repo is public.
+- Personal data (names, phones, addresses) is kept to what orders need. While on free API credits,
+  only demo and role-play data is sent to the model.
+
+## Testing
+
+| Level | What | How |
+|---|---|---|
+| Unit | State machine, totals, delivery fees, `PaymentVerifier`, tools | xUnit, in-memory fakes |
+| Agent loop | Tool calling end to end without the real API | OpenAI SDK with a fake `HttpClient` transport returning scripted completions |
+| Web | Webhook verify, signature, dedupe, ordering | `WebApplicationFactory`, Testcontainers or Docker Postgres |
+| Evals | 25 to 30 real conversations against Muse Spark | `Tendaa.Evals` console, score table |
+
+## Deployment
+
+One container (`Tendaa.Web`, with ffmpeg if voice notes need converting) plus managed PostgreSQL on
+Railway or DigitalOcean. Migrations run on startup in the demo environment. `/health` endpoint.
+WhatsApp webhook pointed at `https://<host>/webhooks/whatsapp`. Local development uses a
+cloudflared or ngrok tunnel.
+
+## Decisions and trade-offs
+
+| Decision | Why | Alternative not taken |
+|---|---|---|
+| One agent + focused media calls | Testable, cheaper, contains prompt injection | Multi-agent orchestration: more moving parts for no gain at this size |
+| No vector database in the MVP | Catalog is structured (SQL), rules fit in the prompt | pgvector RAG: add when a shop has large unstructured documents |
+| Receipt verification in code | Deterministic, auditable, can't be talked out of it | Letting the model judge the receipt |
+| Seller confirms every payment | Screenshots can be faked | Auto-confirm: unsafe without bank or Paystack verification |
+| Inbox table + Channel partitions | No lost messages, per-customer order, no extra infrastructure | Azure Service Bus / RabbitMQ: overkill for the MVP |
+| Blazor Server in the same host | One deployable, all C#, fast to build | Separate React app + API: second language and deployment |
+| ShopId everywhere now | Multi-tenant later without migration pain | Single-tenant schema |

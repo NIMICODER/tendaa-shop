@@ -1,0 +1,14 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Tendaa.Core\Tendaa.Core.csproj" />
+    <ProjectReference Include="..\Tendaa.Agent\Tendaa.Agent.csproj" />
+    <ProjectReference Include="..\Tendaa.Infrastructure\Tendaa.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
+    <UserSecretsId>5b5b6808-57a6-4266-bbeb-0db8476548e9</UserSecretsId>
+  </PropertyGroup>
+
+</Project>

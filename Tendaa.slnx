@@ -1,0 +1,16 @@
+<Solution>
+  <Folder Name="/evals/">
+    <Project Path="evals/Tendaa.Evals/Tendaa.Evals.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/Tendaa.Agent/Tendaa.Agent.csproj" />
+    <Project Path="src/Tendaa.Core/Tendaa.Core.csproj" />
+    <Project Path="src/Tendaa.Infrastructure/Tendaa.Infrastructure.csproj" />
+    <Project Path="src/Tendaa.Web/Tendaa.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Tendaa.Agent.Tests/Tendaa.Agent.Tests.csproj" />
+    <Project Path="tests/Tendaa.Core.Tests/Tendaa.Core.Tests.csproj" />
+    <Project Path="tests/Tendaa.Web.Tests/Tendaa.Web.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,35 @@
+# Build output
+bin/
+obj/
+out/
+publish/
+artifacts/
+
+# IDEs
+.vs/
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.user
+*.suo
+*.rsuser
+
+# Test results
+TestResults/
+coverage/
+*.trx
+
+# Secrets and local config (secrets belong in dotnet user-secrets, never in the repo)
+.env
+.env.*
+!.env.example
+appsettings.*.local.json
+secrets.json
+
+# Local media saved during development (may contain receipts and voice notes)
+media/
+uploads/
+
+# OS
+.DS_Store
+Thumbs.db

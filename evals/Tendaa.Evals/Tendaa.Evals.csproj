@@ -1,0 +1,12 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Tendaa.Agent\Tendaa.Agent.csproj" />
+    <ProjectReference Include="..\..\src\Tendaa.Core\Tendaa.Core.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+</Project>
