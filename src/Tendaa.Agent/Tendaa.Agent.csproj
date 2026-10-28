@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Tendaa.Core\Tendaa.Core.csproj" />
+    <ProjectReference Include="..\Tendaa.Application\Tendaa.Application.csproj" />
   </ItemGroup>
 
   <ItemGroup>

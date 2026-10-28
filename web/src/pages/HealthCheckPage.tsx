@@ -1,20 +1,27 @@
 import { useQuery } from '@tanstack/react-query'
 
-interface HealthResponse {
+interface HealthStatus {
   status: string
   timeUtc: string
 }
 
-async function fetchHealth(): Promise<HealthResponse> {
+interface TendaaResult<T> {
+  isSuccessful: boolean
+  statusCode: number
+  message: string | null
+  data: T
+}
+
+async function fetchHealth(): Promise<TendaaResult<HealthStatus>> {
   const response = await fetch('/api/health')
   if (!response.ok) {
     throw new Error(`Health check failed: ${response.status}`)
   }
-  return (await response.json()) as HealthResponse
+  return (await response.json()) as TendaaResult<HealthStatus>
 }
 
 export function HealthCheckPage() {
-  const { data, error, isPending } = useQuery({
+  const { data: result, error, isPending } = useQuery({
     queryKey: ['health'],
     queryFn: fetchHealth,
   })
@@ -26,9 +33,9 @@ export function HealthCheckPage() {
         <p className="mt-2 text-sm text-slate-400">GET /api/health</p>
         {isPending && <p className="mt-4">Checking…</p>}
         {error && <p className="mt-4 text-red-400">{error.message}</p>}
-        {data && (
+        {result && (
           <p className="mt-4 font-mono text-emerald-400">
-            {data.status} · {data.timeUtc}
+            {result.data.status} · {result.data.timeUtc}
           </p>
         )}
       </div>

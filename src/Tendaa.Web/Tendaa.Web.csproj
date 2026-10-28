@@ -1,9 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <ItemGroup>
-    <ProjectReference Include="..\Tendaa.Core\Tendaa.Core.csproj" />
     <ProjectReference Include="..\Tendaa.Agent\Tendaa.Agent.csproj" />
-    <ProjectReference Include="..\Tendaa.Infrastructure\Tendaa.Infrastructure.csproj" />
+    <ProjectReference Include="..\Tendaa.Application\Tendaa.Application.csproj" />
   </ItemGroup>
 
   <ItemGroup>

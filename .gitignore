@@ -19,6 +19,9 @@ TestResults/
 coverage/
 *.trx
 
+# Serilog file sink output
+logs/
+
 # Secrets and local config (secrets belong in dotnet user-secrets, never in the repo)
 .env
 .env.*

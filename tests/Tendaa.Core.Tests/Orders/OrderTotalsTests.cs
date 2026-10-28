@@ -1,4 +1,5 @@
-﻿using Tendaa.Core.Orders;
+﻿using Tendaa.Core.Models.Entities;
+using Tendaa.Core.Orders;
 
 namespace Tendaa.Core.Tests.Orders;
 

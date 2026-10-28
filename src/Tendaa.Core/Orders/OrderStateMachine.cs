@@ -1,4 +1,7 @@
-﻿namespace Tendaa.Core.Orders;
+﻿using Tendaa.Core.Models.Entities;
+using Tendaa.Core.Models.Enums.Orders;
+
+namespace Tendaa.Core.Orders;
 
 /// <summary>Allowed status transitions, each gated by which actor is allowed to make it. The
 /// caller passes the actor explicitly — it is never inferred from the model — so an agent tool

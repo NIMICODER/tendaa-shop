@@ -70,6 +70,14 @@ cannot confirm"), totals tests pass, migration applies to Docker Postgres, seed 
 **Interview prep:** Why enforce "seller only" in the domain instead of the prompt? How does ShopId
 prepare for multi-tenant?
 
+**Before Phase 2:** the solution was restructured to match my own .NET conventions — see
+`.claude/my-dotnet-conventions.md` (local, not in the repo) for the full reference and
+ARCHITECTURE.md's Components table and Decisions table for what changed and why. New project:
+`Tendaa.Application` (business services, the `TendaaResult` wrapper, DI registration, Serilog,
+global exception handling), sitting between `Tendaa.Infrastructure` and `Tendaa.Agent`/`Tendaa.Web`.
+`Tendaa.Web`'s two endpoints moved from Minimal APIs to Controllers calling Application services.
+Behavior unchanged — same build, same tests, same migration, same Muse Spark reply.
+
 ## Phase 2: Agent core
 **Goal:** the agent takes a full order by text in a console or DevUI.
 - Verify the Agent Framework API against the installed package first. Agent factory with Meta Model API via the OpenAI SDK.
@@ -77,7 +85,9 @@ prepare for multi-tenant?
   model arguments.
 - Tools: `SearchProducts`, `GetProductDetails`, `GetDeliveryFee`, `GetShopInfo`,
   `UpsertDraftOrder`, `GetOrderSummary`, `ConfirmOrderSummary` (to AwaitingPayment, sends bank
-  details), `GetMyOrders`, `RequestHandoff`.
+  details), `GetMyOrders`, `RequestHandoff` — each a thin method in `Tendaa.Agent` over an
+  `Tendaa.Application` service (`Services/Interfaces` + `Services/Implementations`), unwrapping
+  its `TendaaResult<T>` into the small JSON shape the model sees.
 - Instructions: role, tone, the 8 agent rules from SPEC.md, Pidgin handling.
 - Session persistence per customer (`SerializeSessionAsync` stored on Conversation).
 - Trace: store each tool call and result with the assistant message.

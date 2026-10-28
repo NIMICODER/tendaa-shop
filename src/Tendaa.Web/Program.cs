@@ -1,48 +1,35 @@
-﻿using Microsoft.Agents.AI;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using Tendaa.Agent;
-using Tendaa.Agent.Configuration;
-using Tendaa.Core;
-using Tendaa.Infrastructure;
-using Tendaa.Infrastructure.Configuration;
-using Tendaa.Infrastructure.Data;
-using Tendaa.Infrastructure.Seed;
-using Tendaa.Web.Configuration;
+﻿using Microsoft.EntityFrameworkCore;
+using Serilog;
+using Tendaa.Agent.Extensions;
+using Tendaa.Application.Extensions;
+using Tendaa.Infrastructure.Context;
+using Tendaa.Infrastructure.SeedData;
 
 var builder = WebApplication.CreateBuilder(args);
 
+ServiceCollections.ConfigureSerilog(builder);
+
 // Add services to the container.
+builder.Services.AddControllers();
 builder.Services.AddOpenApi();
+builder.Services.AddGlobalExceptionHandling();
+
+builder.Services.BindOptions(builder.Configuration);
+builder.Services.RegisterInfrastructure(builder.Configuration);
+builder.Services.RegisterServices();
+builder.Services.AddTendaaAgent();
 
 // TODO (Phase 5): AddAuthentication/AddAuthorization (cookie, admin password), AddAntiforgery,
 // AddSignalR. [Authorize] goes on every /api route and the hub once those exist.
 
-builder.Services.AddOptions<MetaModelOptions>()
-    .Bind(builder.Configuration.GetSection(MetaModelOptions.SectionName))
-    .ValidateDataAnnotations()
-    .ValidateOnStart();
-builder.Services.AddOptions<WhatsAppOptions>()
-    .Bind(builder.Configuration.GetSection(WhatsAppOptions.SectionName))
-    .ValidateDataAnnotations()
-    .ValidateOnStart();
-builder.Services.AddOptions<DashboardOptions>()
-    .Bind(builder.Configuration.GetSection(DashboardOptions.SectionName))
-    .ValidateDataAnnotations()
-    .ValidateOnStart();
-
-builder.Services.AddTendaaAgent();
-
-builder.Services.AddScoped<ICurrentShopAccessor, CurrentShopAccessor>();
-builder.Services.AddDbContext<TendaaDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("Postgres")));
-
 var app = builder.Build();
+
+app.UseSerilogRequestLogging();
+app.UseExceptionHandler();
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
 {
-    app.UseExceptionHandler();
     // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
@@ -52,12 +39,6 @@ if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 
-    app.MapGet("/dev/ping-model", async ([FromServices] AIAgent agent) =>
-    {
-        var response = await agent.RunAsync("Reply with a short greeting so I know you're working.");
-        return Results.Text(response.Text);
-    });
-
     using (var scope = app.Services.CreateScope())
     {
         var db = scope.ServiceProvider.GetRequiredService<TendaaDbContext>();
@@ -66,9 +47,11 @@ if (app.Environment.IsDevelopment())
 }
 
 // TODO (Phase 5): [Authorize] on every /api route; map the SignalR hub at /hubs/dashboard.
-app.MapGet("/api/health", () => Results.Ok(new { status = "ok", timeUtc = DateTimeOffset.UtcNow }));
+app.MapControllers();
 
 app.UseStaticFiles();
 app.MapFallbackToFile("index.html");
 
 app.Run();
+
+public partial class Program;

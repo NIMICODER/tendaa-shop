@@ -4,6 +4,7 @@
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/Tendaa.Agent/Tendaa.Agent.csproj" />
+    <Project Path="src/Tendaa.Application/Tendaa.Application.csproj" />
     <Project Path="src/Tendaa.Core/Tendaa.Core.csproj" />
     <Project Path="src/Tendaa.Infrastructure/Tendaa.Infrastructure.csproj" />
     <Project Path="src/Tendaa.Web/Tendaa.Web.csproj" />

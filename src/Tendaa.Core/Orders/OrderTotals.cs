@@ -1,4 +1,6 @@
-﻿namespace Tendaa.Core.Orders;
+﻿using Tendaa.Core.Models.Entities;
+
+namespace Tendaa.Core.Orders;
 
 public readonly record struct OrderTotalsResult(decimal ItemTotal, decimal DeliveryFee, decimal GrandTotal);
 

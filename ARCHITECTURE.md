@@ -31,20 +31,21 @@ flowchart LR
         P --> MP[Media pipeline<br/>transcribe, classify, extract]
         P --> AR[Agent runner]
         AR --> T[Agent tools]
-        API[Dashboard REST API<br/>/api, cookie auth + antiforgery]
+        API[Dashboard REST API<br/>Controllers, /api, cookie auth + antiforgery]
         HUB[SignalR hub<br/>/hubs/dashboard]
         STATIC[Static files<br/>built React app + SPA fallback]
     end
-    T --> S[Domain services<br/>Tendaa.Core]
-    API --> S
-    S --> DB[(PostgreSQL)]
+    T --> APP[Application services<br/>Tendaa.Application]
+    API --> APP
+    APP --> S[Domain logic<br/>Tendaa.Core]
+    APP --> DB[(PostgreSQL)]
     P --> DB
     MP --> META[Meta Model API<br/>Muse Spark, Voice Transcribe]
     AR --> META
     P -- replies --> WAC[WhatsApp client]
     S -- notifications --> WAC
     WAC --> WA
-    S -. new order / handoff .-> HUB
+    APP -. new order / handoff .-> HUB
     SELLER[Seller] <--> BROWSER[React dashboard<br/>web/]
     BROWSER -- fetch /api --> API
     BROWSER -- WebSocket --> HUB
@@ -58,12 +59,16 @@ the backend. In production there is one process: `Tendaa.Web` serves the built R
 
 | Project | Responsibility | Depends on |
 |---|---|---|
-| `Tendaa.Core` | Entities, order state machine, totals, delivery fees, payment verification rules, domain services, interfaces (`IWhatsAppSender`, `IMediaStore`, ...) | nothing |
-| `Tendaa.Agent` | Agent factory, instructions, tools, request context, media pipeline (transcriber, image classifier, receipt extractor, product matcher, price list extractor) | Core, Microsoft.Agents.AI, OpenAI SDK |
-| `Tendaa.Infrastructure` | EF Core DbContext, migrations, repositories, WhatsApp Graph API client, media storage | Core |
-| `Tendaa.Web` | Webhook endpoints, inbound queue + processor, dashboard REST API (`/api`) + SignalR hub, static hosting of the built React app, auth, DI wiring, config | all |
+| `Tendaa.Core` | Entities (`Models/Entities`), enums (`Models/Enums/<feature>`), config option classes (`Configurations/ConfigModels`), order state machine, totals, domain interfaces (`IWhatsAppSender`, `IMediaStore`, `IShopScoped`, `ICurrentShopAccessor`, ...) | nothing |
+| `Tendaa.Infrastructure` | EF Core `DbContext` (`Context/`), entity configurations (`Configurations/EntityConfigurations`), migrations, a minimal `IRepository<T>`/`IUnitOfWork`, WhatsApp Graph API client, media storage | Core |
+| `Tendaa.Application` | Business services (`Services/Interfaces` + `Services/Implementations`), the `TendaaResult`/`TendaaResult<T>` response wrapper, DI registration extensions (`Extensions/ServiceCollections.cs`), global exception handling, Serilog bootstrap | Core, Infrastructure |
+| `Tendaa.Agent` | Agent factory, instructions, tools (thin wrappers calling Application services), request context, media pipeline (transcriber, image classifier, receipt extractor, product matcher, price list extractor) | Core, Application, Microsoft.Agents.AI, OpenAI SDK |
+| `Tendaa.Web` | Controllers (webhook endpoints, dashboard REST API under `/api`), SignalR hub, static hosting of the built React app, composition root (`Program.cs`) | Application, Agent |
 | `web/` (`Tendaa.Web.Client`) | React dashboard SPA: pages, typed API client generated from `Tendaa.Web`'s OpenAPI document, SignalR connection for live updates | Vite, React, TypeScript, React Router, TanStack Query, Tailwind CSS, shadcn/ui |
 | `Tendaa.Evals` (`evals/`) | Console app that runs the eval set against the real model | Agent, Core |
+
+Project/folder conventions (naming, layering, DI style, testing) are documented once in
+`.claude/my-dotnet-conventions.md` — not duplicated here. All new code follows it.
 
 ## Inbound message flow
 
@@ -170,7 +175,9 @@ One `AIAgent` built from the OpenAI .NET SDK `ChatClient` pointed at Meta Model 
 identity" above), `Phone` (nullable), and `ConversationId`. Tools read it from DI. The model never
 passes these as arguments, so it can't act on another customer's data.
 
-**Tools** (each a thin method over a domain service, returning small JSON-friendly results):
+**Tools** (each a thin method over a `Tendaa.Application` service, returning small JSON-friendly
+results — the tool unwraps the service's `TendaaResult<T>` into whatever shape the model needs,
+e.g. a bare `"NOT_FOUND"` string, rather than exposing `IsSuccessful`/`StatusCode` to the model):
 
 | Tool | Does | Notes |
 |---|---|---|
@@ -347,3 +354,5 @@ React app as static files with an `index.html` fallback for client-side routes.
 | Inbox table + Channel partitions | No lost messages, per-customer order, no extra infrastructure | Azure Service Bus / RabbitMQ: overkill for the MVP |
 | React SPA (`web/`) + REST API, same repo/host | A dashboard UI I can grow into a real product after the hackathon, with the component and hiring ecosystem that implies; still one deployable via a multi-stage Docker build | Blazor Server: one language, less to build during the hackathon — but trading that build-time simplicity for a weaker long-term base for the dashboard. Honest cost of the choice made: a second stack, a REST API surface to design and test, and generated-client plumbing that Blazor would not have needed |
 | ShopId everywhere now | Multi-tenant later without migration pain | Single-tenant schema |
+| Controllers + Application services + `TendaaResult` wrapper, not Minimal APIs | Matches my established .NET conventions (`.claude/my-dotnet-conventions.md`); one consistent response shape across every endpoint as the dashboard API grows in Phase 5 | Minimal APIs: less ceremony for two small endpoints today, but inconsistent with the conventions the real dashboard API needs to follow |
+| Minimal `IRepository<T>` + `IUnitOfWork` (no per-type caching, no explicit transaction methods) | A thin seam over `DbSet<T>` for testability, without ceremony Tendaa doesn't need yet | My own `GetRepository<T>()` + cached-dictionary + `Begin/Commit/RollbackTransaction` pattern: more machinery than a single-DbContext MVP needs |
