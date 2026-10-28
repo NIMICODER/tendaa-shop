@@ -10,18 +10,24 @@ Submission deadline: **Thu Nov 5, 3:00 AM Lagos** (Nov 4, 9 PM ET). Target: subm
 Priority if time runs short: a reliable demo of flows D, E and F (order, receipt, confirm) beats
 everything else. Cut in this order: price list snap, photo match, should-haves, dashboard polish.
 
+We're about a day behind: Phase 0 ran from Tue Oct 27 into Wed Oct 28. Target: Phase 1 done Wed Oct
+28, so Phase 2 starts Thu Oct 29. Everything from Phase 2 on is shifted one day later than the
+original plan — see the honest cut-order check at the end of Phase 1 in BUILDLOG.md for what that
+costs: as shifted below, Nov 3 and Nov 4 both carry a full phase *and* submission, with no slack
+day left before the deadline.
+
 | Date | Build target | Live events (Lagos) |
 |---|---|---|
 | Mon Oct 26 | Kickoff. Create repo, add this setup, ask the pre-event code question in #questions | Kickoff 5 PM |
-| Tue Oct 27 | Phase 0 (setup) + Phase 1 (domain and data) | Office hours 3 to 4 PM · Agents 101 5 to 6 PM |
-| Wed Oct 28 | Phase 2 (agent core) | Office hours 3 to 4 PM · Agents 102: verifiable agents 5 to 6 PM |
-| Thu Oct 29 | Phase 3 (WhatsApp end to end) | Office hours 3 to 4 PM |
-| Fri Oct 30 | Phase 4a (voice notes) + 4b start (receipt check) | Office hours 3 to 4 PM · Fireworks session 5 to 6 PM (optional) |
-| Sat Oct 31 | Phase 4b (receipts, photo match, price list snap) | none |
-| Sun Nov 1 | Phase 5 (dashboard) + deploy so a real seller can try it | none (US clocks change) |
-| Mon Nov 2 | Phase 5 finish + Phase 6 (evals, hardening). Real seller trial | Office hours 4 to 5 PM |
-| Tue Nov 3 | Phase 7 (README, demo video, X post draft). Last day for help | Office hours 4 to 5 PM |
-| Wed Nov 4 | Buffer, final checks, **submit by 6 PM**, post on X, share for votes | Final office hours |
+| Tue Oct 27 | Phase 0 (setup) — ran long, finished Wed Oct 28 | Office hours 3 to 4 PM · Agents 101 5 to 6 PM |
+| Wed Oct 28 | Phase 1 (domain and data) | Office hours 3 to 4 PM |
+| Thu Oct 29 | Phase 2 (agent core) | Office hours 3 to 4 PM · Agents 102: verifiable agents 5 to 6 PM |
+| Fri Oct 30 | Phase 3 (WhatsApp end to end) | Office hours 3 to 4 PM · Fireworks session 5 to 6 PM (optional) |
+| Sat Oct 31 | Phase 4a (voice notes) + 4b start (receipt check) | none |
+| Sun Nov 1 | Phase 4b (receipts, photo match, price list snap) | none (US clocks change) |
+| Mon Nov 2 | Phase 5 (dashboard) + deploy so a real seller can try it | Office hours 4 to 5 PM |
+| Tue Nov 3 | Phase 5 finish + Phase 6 (evals, hardening). Real seller trial | Office hours 4 to 5 PM |
+| Wed Nov 4 | Phase 7 (README, demo video, X post draft) + **submit by 6 PM**, post on X, share for votes | Final office hours |
 
 Every evening: update BUILDLOG.md, commit, and post a short build update on X (builds an audience for the
 Most Viral and Community Vote prizes).
@@ -49,9 +55,9 @@ shows the proxied `/api/health` response in the browser, CI is green.
 
 ## Phase 1: Domain and data
 **Goal:** the business model is correct before any AI touches it.
-- Entities: Shop, Product (+ variants and stock), DeliveryZone, Customer (by phone), Order,
-  OrderItem, PaymentProof, Conversation, Message (with tool calls + trace), Handoff.
-  `ShopId` on everything.
+- Entities: Shop, Product (+ variants and stock), DeliveryZone, Customer (by BSUID — WhatsApp
+  business-scoped user id, unique per `ShopId`; phone number nullable), Order, OrderItem,
+  PaymentProof, Conversation, Message (with tool calls + trace), Handoff. `ShopId` on everything.
 - Order state machine in `Tendaa.Core` (SPEC.md statuses). `Confirm` requires a seller actor;
   calling it as the agent throws.
 - Totals: items + delivery fee by zone. Money as `decimal` in the shop's currency (`Shop.Currency`, NGN for the demo shop).
@@ -67,36 +73,44 @@ prepare for multi-tenant?
 ## Phase 2: Agent core
 **Goal:** the agent takes a full order by text in a console or DevUI.
 - Verify the Agent Framework API against the installed package first. Agent factory with Meta Model API via the OpenAI SDK.
-- Request context (shop + customer phone) injected into tools, never from model arguments.
+- Request context (shop + `CustomerId`, resolved from the BSUID) injected into tools, never from
+  model arguments.
 - Tools: `SearchProducts`, `GetProductDetails`, `GetDeliveryFee`, `GetShopInfo`,
   `UpsertDraftOrder`, `GetOrderSummary`, `ConfirmOrderSummary` (to AwaitingPayment, sends bank
   details), `GetMyOrders`, `RequestHandoff`.
 - Instructions: role, tone, the 8 agent rules from SPEC.md, Pidgin handling.
 - Session persistence per customer (`SerializeSessionAsync` stored on Conversation).
 - Trace: store each tool call and result with the assistant message.
-- Console runner or DevUI to chat as different phone numbers.
+- Console runner or DevUI to chat as different customers (test BSUIDs).
 
 **Done when:** flow B and flow D work by text against Muse Spark; missing info gets one question;
 out-of-stock size offers alternatives; refund request creates a handoff; tools have unit tests;
 one agent-loop test runs against a fake OpenAI server.
 
-**Interview prep:** How does the model decide which tool to call? Why does the phone number never
-come from the model? How do you stop it inventing prices?
+**Interview prep:** How does the model decide which tool to call? Why does the customer's identity
+(BSUID, resolved server-side) never come from the model? How do you stop it inventing prices?
 
 ## Phase 3: WhatsApp
 **Goal:** a real conversation on the test number.
 - `GET /webhooks/whatsapp` verify challenge. `POST` validates `X-Hub-Signature-256` with the App
   Secret over the raw body (constant-time compare).
 - Save every event to `InboundEvent` (unique WhatsApp message id = dedupe) before returning 200.
-  Enqueue to partitioned `Channel<T>` (hash of phone), one worker per partition, processed by a
-  `BackgroundService`. On startup, re-queue `Pending` events; retry failures up to 3 times.
+  Enqueue to partitioned `Channel<T>` (hash of BSUID — `from_user_id`, since phone can be absent),
+  one worker per partition, processed by a `BackgroundService`. On startup, re-queue `Pending`
+  events; retry failures up to 3 times.
+  Parsing handles messages with no `from` (phone), and the `user_changed_user_id` /
+  `user_changed_number` system messages (link the new BSUID to the existing `Customer` via
+  `system.previous_user_id` — see ARCHITECTURE.md's "Customer identity").
 - Graph API client: send text, mark as read, typing indicator if available, retry transient errors.
 - Handed-off chats skip the agent.
 - Tunnel (cloudflared or ngrok), register callback, subscribe to `messages`.
 
 **Done when:** an order placed from my phone works end to end; tampered signature rejected (test);
 duplicate webhook produces one reply (test); a burst of 3 messages is answered in order; killing
-the app after a 200 and restarting still answers the message.
+the app after a 200 and restarting still answers the message; a payload with no `from`/phone
+number parses and routes correctly (test); a `user_changed_user_id` or `user_changed_number`
+payload links to the existing customer by `previous_user_id` instead of creating a duplicate
+(test).
 
 **Interview prep:** Why return 200 before processing? What if the process dies after the 200?
 What's the 24-hour window?

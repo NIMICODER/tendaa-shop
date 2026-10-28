@@ -8,7 +8,10 @@ services:
       POSTGRES_USER: tendaa
       POSTGRES_PASSWORD: tendaa_dev
     ports:
-      - "5432:5432"
+      # Host port 5433, not 5432: this machine also runs a native PostgreSQL 16 Windows service
+      # on 5432 (IPv4), which `localhost` resolves to ahead of Docker's IPv6 listener — connecting
+      # to "localhost:5432" silently hit the wrong Postgres instead of this container.
+      - "5433:5432"
     volumes:
       - tendaa-postgres-data:/var/lib/postgresql/data
     healthcheck:

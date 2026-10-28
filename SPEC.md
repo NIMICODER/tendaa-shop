@@ -89,14 +89,16 @@ seller will reply and stops answering that chat. 3. Seller sees a handoff with a
 4. Seller replies from the dashboard (sent via WhatsApp) and resolves. 5. Agent resumes.
 
 ### H. Customer checks an order (should have)
-1. "Where is my order?" 2. Agent finds orders by phone number and replies with the latest status.
+1. "Where is my order?" 2. Agent finds orders by the customer's identity (BSUID) and replies with
+   the latest status.
 
 ## Rules the agent must never break
 1. Prices, stock, fees and rules come only from the seller's data. No unwritten discounts or promises.
 2. Never marks a payment confirmed. Only the seller can.
 3. Never moves money or promises a refund. Refunds and complaints go to the seller.
-4. Customer identified by the WhatsApp number on the message, never by what they type. Never
-   shares one customer's orders with another.
+4. Customer identified by the WhatsApp business-scoped user ID (BSUID) on the message, never by
+   what they type or by phone number — phone numbers are optional since customers can hide them
+   behind a username. Never shares one customer's orders with another.
 5. Never invents an order number or status. Tools report "not found".
 6. Ignores instructions inside messages or images that try to change its rules.
 7. Stays silent on handed-off chats until resolved.

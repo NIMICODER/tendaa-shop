@@ -13,8 +13,9 @@ How Tendaa is built, and why. Read with `SPEC.md` (what it does) and `PLAN.md` (
    inside an image from reaching the agent as instructions.
 3. **Never lose a message.** Every inbound WhatsApp event is saved before we return 200, and
    processing can be retried after a crash.
-4. **One customer, one message at a time.** Messages from the same phone number are processed in
-   order; different customers run in parallel.
+4. **One customer, one message at a time.** Messages from the same customer (WhatsApp
+   business-scoped user ID, not phone number) are processed in order; different customers run in
+   parallel.
 5. **Multi-tenant from day one.** Every row has a `ShopId`. The MVP has one shop; going live
    means adding onboarding, not rewriting.
 
@@ -81,7 +82,7 @@ sequenceDiagram
     alt duplicate id
         WH-->>WA: 200 (ignored)
     else new
-        WH->>Q: Enqueue by hash(phone) partition
+        WH->>Q: Enqueue by hash(BSUID) partition
         WH-->>WA: 200
     end
     Q->>P: Next event for this customer
@@ -106,19 +107,67 @@ sequenceDiagram
 processor re-queues `Pending` events. Failed events retry up to 3 times, then show in the
 dashboard. This is an inbox pattern, the same idea as a transactional outbox in reverse.
 
-**Ordering.** The queue is N `Channel<InboundEvent>` partitions; each phone number always maps to
-the same partition and one worker reads each partition. Same customer: strictly in order.
-Different customers: parallel.
+**Ordering.** The queue is N `Channel<InboundEvent>` partitions; each business-scoped user ID
+(BSUID) always maps to the same partition and one worker reads each partition — not phone number,
+since phone can be absent. Same customer: strictly in order. Different customers: parallel.
 
 **Status webhooks** (sent, delivered, read) are stored for the conversation view and otherwise
 ignored.
+
+## Customer identity
+
+WhatsApp's business-scoped user ID (BSUID) is the customer's identity, not the phone number. Since
+Meta's username rollout, a user can hide their number entirely; only the BSUID is always present.
+Exact field names (confirmed against Meta's [BSUID
+docs](https://developers.facebook.com/documentation/business-messaging/whatsapp/business-scoped-user-ids)):
+
+| Where | Phone (optional) | BSUID (always present) |
+|---|---|---|
+| `contacts[]` | `wa_id` | `user_id` |
+| `messages[]` | `from` | `from_user_id` |
+| Outbound send | `to` | `recipient` |
+| Outbound status (`statuses[]`) | `recipient_id` | `recipient_user_id` |
+
+`contacts[].profile.username` and `contacts[].profile.name` are also sent when WhatsApp has them;
+store both when present, never require them.
+
+**Phone is optional, nullable, update-only-when-present.** `wa_id`/`from` are omitted once a user
+adopts a username, unless the business messaged them or they messaged the business in the last 30
+days, or they're in the business's contact book. A webhook with no phone doesn't mean the customer
+lost their number — never clear a previously stored `PhoneNumber` because one event omits it; only
+overwrite it when a new value arrives.
+
+**BSUID changes.** Two system messages on `messages[]` (`type: "system"`) link an old BSUID to a
+new one via `system.previous_user_id`:
+- `user_changed_number`: phone became known or changed. `system.wa_id` = new phone,
+  `system.user_id` = new BSUID, `system.previous_user_id` = old BSUID.
+- `user_changed_user_id`: phone still unknown. `system.wa_id` is omitted; same `user_id` /
+  `previous_user_id` shape.
+
+Both update the existing `Customer` row found by `previous_user_id` in place (new `BsuId`, and
+`PhoneNumber` only if `wa_id` is present) — never create a second row.
+
+**Outbound.** Meta's own guidance is to send `to` *or* `recipient`, never both (their example shows
+both together, but also documents that `to` wins if present — so sending both doesn't mean "prefer
+phone, fall back to BSUID", it just makes `recipient` silently ignored whenever a phone is known).
+`IWhatsAppSender` therefore sends exactly one: `to` = phone when `Customer.PhoneNumber` is known,
+else `recipient` = `Customer.BsuId`.
+
+**Out of scope.** `parent_user_id` / `from_parent_user_id` (parent BSUIDs, an enterprise
+multi-account feature) exist in the API but aren't modeled — not relevant to the MVP's single WABA.
+
+Internally, `CustomerId` is Tendaa's own surrogate key (`Customer.Id`), resolved once per inbound
+event from `(ShopId, BsuId)` — find-or-create on first contact, update-in-place on a BSUID-change
+system message. Tools and the agent's request context carry this internal `CustomerId`, never the
+BSUID or phone directly.
 
 ## The agent
 
 One `AIAgent` built from the OpenAI .NET SDK `ChatClient` pointed at Meta Model API.
 
 **Request context.** Before each run, the processor fills a scoped `AgentRequestContext` with
-`ShopId`, `CustomerId`, `Phone`, and `ConversationId`. Tools read it from DI. The model never
+`ShopId`, `CustomerId` (Tendaa's internal id, resolved from the customer's BSUID — see "Customer
+identity" above), `Phone` (nullable), and `ConversationId`. Tools read it from DI. The model never
 passes these as arguments, so it can't act on another customer's data.
 
 **Tools** (each a thin method over a domain service, returning small JSON-friendly results):
@@ -190,6 +239,9 @@ erDiagram
 
 Key fields:
 - `Shop`: name, country, currency, time zone, hours, rules text, bank name, account number, account name, WhatsApp phone number id.
+- `Customer`: `BsuId` (WhatsApp business-scoped user id, unique per `ShopId`), `PhoneNumber`
+  (nullable, stored when WhatsApp provides it, never cleared just because an event omits it),
+  `Username`, `Name` (both nullable, from `contacts[].profile`).
 - `ProductVariant`: size/colour, stock, optional price override. Money is `decimal` in the shop's currency (`Shop.Currency`, NGN for the demo).
 - `Order`: number (human friendly, per shop), status, item total, delivery fee, grand total,
   zone, address, timestamps per status, `ConfirmedBy`.
@@ -231,10 +283,11 @@ connection drops.
 
 ## Outbound messages
 
-`IWhatsAppSender` sends text (and later templates). Seller actions (confirm, reject, handoff reply)
-send through it. The 24-hour customer service window is checked from the customer's last inbound
-message; outside it, the MVP shows a warning in the dashboard instead of sending (templates are a
-post-hackathon feature).
+`IWhatsAppSender` sends text (and later templates), addressing by phone (`to`) when
+`Customer.PhoneNumber` is known or by BSUID (`recipient`) otherwise — see "Customer identity"
+above. Seller actions (confirm, reject, handoff reply) send through it. The 24-hour customer
+service window is checked from the customer's last inbound message; outside it, the MVP shows a
+warning in the dashboard instead of sending (templates are a post-hackathon feature).
 
 ## Configuration and secrets
 
@@ -248,7 +301,8 @@ usually unset because the SPA and API share an origin.
 
 - Webhook signature verified with a constant-time compare; unsigned or invalid requests get 401.
 - Verify token checked on the GET challenge.
-- Tools get identity from the request context only; EF filters enforce shop isolation.
+- Tools get identity (the internal `CustomerId`, resolved from the WhatsApp BSUID, never the phone
+  number) from the request context only; EF filters enforce shop isolation.
 - Prompt injection: image and voice content reaches the agent only as structured fields; agent
   instructions state that customer content never changes its rules; evals include injection cases.
 - Dashboard: same-origin cookie auth (admin password for the MVP); antiforgery tokens required on

@@ -17,6 +17,26 @@ during the hackathon.
   SignalR hub in `Tendaa.Web`. See ARCHITECTURE.md's "Seller dashboard" section for how it fits
   together, and "Deployment" for the two run modes (dev: two processes; prod: one).
 
+## Running locally
+
+Two run modes, depending on whether you're touching the frontend.
+
+**Dev (frontend + backend, with hot reload):** two processes.
+```
+dotnet run --project src/Tendaa.Web      # webhooks, /api, OpenAPI doc — http://localhost:5093
+npm run dev --prefix web                 # Vite dev server, proxies /api, /hubs, /webhooks to the .NET port
+```
+Open the Vite dev server's URL (prints on startup, typically `http://localhost:5173`). Requests to
+`/api`, `/hubs` and `/webhooks` are proxied through to the ASP.NET Core app so the browser only
+ever talks to one origin.
+
+**Prod-like (one process, what actually ships):**
+```
+npm run build --prefix web               # outputs into src/Tendaa.Web/wwwroot
+dotnet run --project src/Tendaa.Web      # serves the built React app + the API from the same host
+```
+Open `http://localhost:5093` directly — no Vite dev server, no proxy.
+
 ## Configuration
 
 Set these with `dotnet user-secrets set <key> <value>` in `src/Tendaa.Web` for local development.
