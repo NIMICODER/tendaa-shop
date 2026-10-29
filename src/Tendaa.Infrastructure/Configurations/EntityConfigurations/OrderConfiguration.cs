@@ -15,6 +15,7 @@ public sealed class OrderConfiguration : IEntityTypeConfiguration<Order>
         builder.Property(o => o.GrandTotal).HasPrecision(18, 2);
         builder.Property(o => o.Address).HasMaxLength(500);
         builder.Property(o => o.ConfirmedBy).HasMaxLength(200);
+        builder.Property(o => o.CustomerName).HasMaxLength(200);
 
         // Human-friendly order numbers are sequential per shop, not globally unique.
         builder.HasIndex(o => new { o.ShopId, o.Number }).IsUnique();

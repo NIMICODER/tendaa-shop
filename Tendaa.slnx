@@ -11,6 +11,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Tendaa.Agent.Tests/Tendaa.Agent.Tests.csproj" />
+    <Project Path="tests/Tendaa.Application.Tests/Tendaa.Application.Tests.csproj" />
     <Project Path="tests/Tendaa.Core.Tests/Tendaa.Core.Tests.csproj" />
     <Project Path="tests/Tendaa.Web.Tests/Tendaa.Web.Tests.csproj" />
   </Folder>

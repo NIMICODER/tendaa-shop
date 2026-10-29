@@ -19,6 +19,7 @@ public sealed class Order : IShopScoped
 
     public Guid? DeliveryZoneId { get; set; }
     public string? Address { get; set; }
+    public string? CustomerName { get; set; }
 
     /// <summary>Set by the dashboard when a seller moves the order to <see cref="OrderStatus.Confirmed"/>.
     /// No separate seller-user model yet in the MVP (one admin login per shop), so this is free text.</summary>

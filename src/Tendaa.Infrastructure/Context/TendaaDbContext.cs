@@ -25,6 +25,17 @@ public sealed class TendaaDbContext(DbContextOptions<TendaaDbContext> options, I
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(TendaaDbContext).Assembly);
 
+        // Every entity's Id is a client-generated Guid (set via Guid.NewGuid() in application
+        // code), never database-generated. Without this, EF Core's default Guid convention
+        // (ValueGeneratedOnAdd) leaves it ambiguous whether an entity reached via navigation-
+        // collection fixup on an already-tracked parent (e.g. `order.Items.Add(...)` on a Draft
+        // order loaded from the DB) is new or pre-existing, and it can silently generate an
+        // UPDATE for a row that was never inserted instead of an INSERT.
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+        {
+            modelBuilder.Entity(entityType.ClrType).Property("Id").ValueGeneratedNever();
+        }
+
         // Every IShopScoped entity gets a global query filter, so a missing `WHERE ShopId = ...`
         // can't leak another shop's data. HasQueryFilter's lambda type is only known at runtime
         // per entity, hence the reflection — this is the standard EF Core pattern for applying a

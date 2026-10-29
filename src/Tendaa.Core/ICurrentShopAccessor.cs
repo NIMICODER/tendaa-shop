@@ -7,4 +7,9 @@
 public interface ICurrentShopAccessor
 {
     Guid? ShopId { get; }
+
+    /// <summary>Scopes the rest of this request/event to <paramref name="shopId"/>. Called once,
+    /// by whatever resolved the shop (the dev chat endpoint for now; Phase 3's webhook processor
+    /// and the Phase 5 dashboard auth middleware later) — never by a tool or service mid-request.</summary>
+    void SetShopId(Guid shopId);
 }

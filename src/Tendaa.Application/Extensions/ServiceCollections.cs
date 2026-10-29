@@ -51,6 +51,13 @@ public static class ServiceCollections
     {
         services.AddScoped<IHealthService, HealthService>();
         services.AddScoped<IModelPingService, ModelPingService>();
+        services.AddScoped<ICustomerService, CustomerService>();
+        services.AddScoped<IProductService, ProductService>();
+        services.AddScoped<IDeliveryService, DeliveryService>();
+        services.AddScoped<IShopService, ShopService>();
+        services.AddScoped<IOrderService, OrderService>();
+        services.AddScoped<IHandoffService, HandoffService>();
+        services.AddScoped<IConversationService, ConversationService>();
 
         return services;
     }

@@ -200,9 +200,9 @@ than silently eating into Tuesday or Wednesday — evals (Phase 6) are judged to
 ## Progress
 | Phase | Status | Notes |
 |---|---|---|
-| 0 Setup | Not started | |
-| 1 Domain and data | Not started | |
-| 2 Agent core | Not started | |
+| 0 Setup | Done | Committed 69b2565. |
+| 1 Domain and data | Done | Committed 3f33d10; restructure to own conventions in f06e162. |
+| 2 Agent core | Done | All Done-when items verified against real Muse Spark (flow B, D, G); not yet committed. |
 | 3 WhatsApp | Not started | |
 | 4a Voice notes | Not started | |
 | 4b Vision | Not started | |

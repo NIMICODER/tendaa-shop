@@ -22,7 +22,7 @@ namespace Tendaa.Infrastructure.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("Tendaa.Core.Conversations.Conversation", b =>
+            modelBuilder.Entity("Tendaa.Core.Models.Entities.Conversation", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -45,7 +45,112 @@ namespace Tendaa.Infrastructure.Migrations
                     b.ToTable("Conversations");
                 });
 
-            modelBuilder.Entity("Tendaa.Core.Conversations.Message", b =>
+            modelBuilder.Entity("Tendaa.Core.Models.Entities.Customer", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BsuId")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("PhoneNumber")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<Guid>("ShopId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Username")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ShopId", "BsuId")
+                        .IsUnique();
+
+                    b.ToTable("Customers");
+                });
+
+            modelBuilder.Entity("Tendaa.Core.Models.Entities.DeliveryZone", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("DeliveryTimeText")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<decimal>("Fee")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("ShopId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("DeliveryZones");
+                });
+
+            modelBuilder.Entity("Tendaa.Core.Models.Entities.Handoff", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ConversationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("ResolvedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ResolvedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("ShopId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Summary")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Handoffs");
+                });
+
+            modelBuilder.Entity("Tendaa.Core.Models.Entities.Message", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -92,150 +197,7 @@ namespace Tendaa.Infrastructure.Migrations
                     b.ToTable("Messages");
                 });
 
-            modelBuilder.Entity("Tendaa.Core.Conversations.ToolTrace", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ArgumentsJson")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("DurationMs")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid>("MessageId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ResultJson")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<Guid>("ShopId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ToolName")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("MessageId");
-
-                    b.ToTable("ToolTraces");
-                });
-
-            modelBuilder.Entity("Tendaa.Core.Customers.Customer", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("BsuId")
-                        .IsRequired()
-                        .HasMaxLength(160)
-                        .HasColumnType("character varying(160)");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Name")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<string>("PhoneNumber")
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<Guid>("ShopId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Username")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ShopId", "BsuId")
-                        .IsUnique();
-
-                    b.ToTable("Customers");
-                });
-
-            modelBuilder.Entity("Tendaa.Core.Delivery.DeliveryZone", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("DeliveryTimeText")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<decimal>("Fee")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<Guid>("ShopId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("DeliveryZones");
-                });
-
-            modelBuilder.Entity("Tendaa.Core.Handoffs.Handoff", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("ConversationId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Reason")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTimeOffset?>("ResolvedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ResolvedBy")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<Guid>("ShopId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<string>("Summary")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("Handoffs");
-                });
-
-            modelBuilder.Entity("Tendaa.Core.Orders.Order", b =>
+            modelBuilder.Entity("Tendaa.Core.Models.Entities.Order", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -263,6 +225,10 @@ namespace Tendaa.Infrastructure.Migrations
 
                     b.Property<Guid>("CustomerId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("CustomerName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
                     b.Property<DateTimeOffset?>("DeliveredAt")
                         .HasColumnType("timestamp with time zone");
@@ -307,7 +273,7 @@ namespace Tendaa.Infrastructure.Migrations
                     b.ToTable("Orders");
                 });
 
-            modelBuilder.Entity("Tendaa.Core.Orders.OrderItem", b =>
+            modelBuilder.Entity("Tendaa.Core.Models.Entities.OrderItem", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -336,7 +302,7 @@ namespace Tendaa.Infrastructure.Migrations
                     b.ToTable("OrderItems");
                 });
 
-            modelBuilder.Entity("Tendaa.Core.Payments.PaymentProof", b =>
+            modelBuilder.Entity("Tendaa.Core.Models.Entities.PaymentProof", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -375,7 +341,7 @@ namespace Tendaa.Infrastructure.Migrations
                     b.ToTable("PaymentProofs");
                 });
 
-            modelBuilder.Entity("Tendaa.Core.Products.Product", b =>
+            modelBuilder.Entity("Tendaa.Core.Models.Entities.Product", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -408,7 +374,7 @@ namespace Tendaa.Infrastructure.Migrations
                     b.ToTable("Products");
                 });
 
-            modelBuilder.Entity("Tendaa.Core.Products.ProductVariant", b =>
+            modelBuilder.Entity("Tendaa.Core.Models.Entities.ProductVariant", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -442,7 +408,7 @@ namespace Tendaa.Infrastructure.Migrations
                     b.ToTable("ProductVariants");
                 });
 
-            modelBuilder.Entity("Tendaa.Core.Shops.Shop", b =>
+            modelBuilder.Entity("Tendaa.Core.Models.Entities.Shop", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -494,58 +460,96 @@ namespace Tendaa.Infrastructure.Migrations
                     b.ToTable("Shops");
                 });
 
-            modelBuilder.Entity("Tendaa.Core.Conversations.Message", b =>
+            modelBuilder.Entity("Tendaa.Core.Models.Entities.ToolTrace", b =>
                 {
-                    b.HasOne("Tendaa.Core.Conversations.Conversation", null)
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ArgumentsJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("DurationMs")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("MessageId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ResultJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("ShopId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ToolName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MessageId");
+
+                    b.ToTable("ToolTraces");
+                });
+
+            modelBuilder.Entity("Tendaa.Core.Models.Entities.Message", b =>
+                {
+                    b.HasOne("Tendaa.Core.Models.Entities.Conversation", null)
                         .WithMany("Messages")
                         .HasForeignKey("ConversationId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("Tendaa.Core.Conversations.ToolTrace", b =>
+            modelBuilder.Entity("Tendaa.Core.Models.Entities.OrderItem", b =>
                 {
-                    b.HasOne("Tendaa.Core.Conversations.Message", null)
-                        .WithMany("ToolTraces")
-                        .HasForeignKey("MessageId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("Tendaa.Core.Orders.OrderItem", b =>
-                {
-                    b.HasOne("Tendaa.Core.Orders.Order", null)
+                    b.HasOne("Tendaa.Core.Models.Entities.Order", null)
                         .WithMany("Items")
                         .HasForeignKey("OrderId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("Tendaa.Core.Products.ProductVariant", b =>
+            modelBuilder.Entity("Tendaa.Core.Models.Entities.ProductVariant", b =>
                 {
-                    b.HasOne("Tendaa.Core.Products.Product", null)
+                    b.HasOne("Tendaa.Core.Models.Entities.Product", null)
                         .WithMany("Variants")
                         .HasForeignKey("ProductId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("Tendaa.Core.Conversations.Conversation", b =>
+            modelBuilder.Entity("Tendaa.Core.Models.Entities.ToolTrace", b =>
+                {
+                    b.HasOne("Tendaa.Core.Models.Entities.Message", null)
+                        .WithMany("ToolTraces")
+                        .HasForeignKey("MessageId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Tendaa.Core.Models.Entities.Conversation", b =>
                 {
                     b.Navigation("Messages");
                 });
 
-            modelBuilder.Entity("Tendaa.Core.Conversations.Message", b =>
+            modelBuilder.Entity("Tendaa.Core.Models.Entities.Message", b =>
                 {
                     b.Navigation("ToolTraces");
                 });
 
-            modelBuilder.Entity("Tendaa.Core.Orders.Order", b =>
+            modelBuilder.Entity("Tendaa.Core.Models.Entities.Order", b =>
                 {
                     b.Navigation("Items");
                 });
 
-            modelBuilder.Entity("Tendaa.Core.Products.Product", b =>
+            modelBuilder.Entity("Tendaa.Core.Models.Entities.Product", b =>
                 {
                     b.Navigation("Variants");
                 });
