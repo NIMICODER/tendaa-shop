@@ -20,7 +20,7 @@ public class DeliveryServiceTests : SqliteApplicationTestBase
     public async Task GetFeeAsync_AreaMatchesZoneName_ReturnsMatchedZoneAndAllZones()
     {
         await SeedZonesAsync();
-        var service = new DeliveryService(CreateRepository<DeliveryZone>());
+        var service = new DeliveryService(CreateRepository<DeliveryZone>(), CreateRepository<Shop>());
 
         var result = await service.GetFeeAsync(_shopId, "Lekki");
 
@@ -35,7 +35,7 @@ public class DeliveryServiceTests : SqliteApplicationTestBase
     public async Task GetFeeAsync_AreaDoesNotMatchAnyZone_ReturnsNullMatchButAllZones()
     {
         await SeedZonesAsync();
-        var service = new DeliveryService(CreateRepository<DeliveryZone>());
+        var service = new DeliveryService(CreateRepository<DeliveryZone>(), CreateRepository<Shop>());
 
         var result = await service.GetFeeAsync(_shopId, "Surulere");
 

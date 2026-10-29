@@ -11,23 +11,30 @@ namespace Tendaa.Agent.Tests.Fakes;
 public sealed class ScriptedChatClient(IReadOnlyList<ChatResponse> script) : IChatClient
 {
     private int _callCount;
+    private readonly Lock _lock = new();
 
+    /// <summary>Thread-safe for concurrent callers (the customer-isolation concurrency test runs
+    /// two turns in parallel against one shared instance) — both the call-counter increment and
+    /// the recorded-messages list need to stay consistent under that.</summary>
     public List<IReadOnlyList<ChatMessage>> ReceivedMessages { get; } = [];
 
     public Task<ChatResponse> GetResponseAsync(
         IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
     {
-        ReceivedMessages.Add([.. messages]);
-
-        if (_callCount >= script.Count)
+        lock (_lock)
         {
-            throw new InvalidOperationException(
-                $"ScriptedChatClient received a {_callCount + 1}th call, but the script only has {script.Count} response(s).");
-        }
+            ReceivedMessages.Add([.. messages]);
 
-        var response = script[_callCount];
-        _callCount++;
-        return Task.FromResult(response);
+            if (_callCount >= script.Count)
+            {
+                throw new InvalidOperationException(
+                    $"ScriptedChatClient received a {_callCount + 1}th call, but the script only has {script.Count} response(s).");
+            }
+
+            var response = script[_callCount];
+            _callCount++;
+            return Task.FromResult(response);
+        }
     }
 
     public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(

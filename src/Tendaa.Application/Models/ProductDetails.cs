@@ -5,4 +5,5 @@ public sealed record ProductDetails(
     string Name,
     string? Category,
     string? Description,
-    IReadOnlyList<VariantStock> Variants);
+    IReadOnlyList<VariantStock> Variants,
+    string? PhotoUrl);

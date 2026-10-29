@@ -18,13 +18,15 @@ public interface IConversationService
     Task SaveSessionAsync(
         AIAgent agent, Conversation conversation, AgentSession session, CancellationToken cancellationToken = default);
 
-    /// <summary>Persists the inbound customer message and the outbound assistant reply, with
-    /// <paramref name="toolTraces"/> linked to the assistant <c>Message</c>, in one call.</summary>
+    /// <summary>Persists the inbound customer message and, when <paramref name="assistantText"/>
+    /// is non-null, the outbound assistant reply with <paramref name="toolTraces"/> linked to it
+    /// — in one call. Pass null for <paramref name="assistantText"/> when the agent never ran
+    /// (e.g. the conversation is handed off, SPEC.md rule 7): only the inbound message is saved.</summary>
     Task SaveTurnAsync(
         Guid shopId,
         Guid conversationId,
         string userText,
-        string assistantText,
+        string? assistantText,
         IReadOnlyList<ToolTraceEntry> toolTraces,
         CancellationToken cancellationToken = default);
 }

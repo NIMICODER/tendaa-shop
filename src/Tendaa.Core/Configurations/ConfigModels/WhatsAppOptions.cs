@@ -20,4 +20,8 @@ public sealed class WhatsAppOptions
 
     [Required]
     public string VerifyToken { get; set; } = string.Empty;
+
+    /// <summary>Graph API version, e.g. "v23.0". Not a secret — defaults to a working value so
+    /// nothing new needs configuring, but override here if Meta deprecates it.</summary>
+    public string GraphApiVersion { get; set; } = "v23.0";
 }

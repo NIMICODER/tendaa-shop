@@ -5,6 +5,7 @@ using Tendaa.Agent.Context;
 using Tendaa.Agent.Tracing;
 using Tendaa.Application.Models;
 using Tendaa.Application.Services.Interfaces;
+using Tendaa.Core;
 
 namespace Tendaa.Agent.Tools;
 
@@ -25,6 +26,9 @@ public sealed class OrderingTools(
     IShopService shopService,
     IOrderService orderService,
     IHandoffService handoffService,
+    ICustomerService customerService,
+    IWhatsAppSender whatsAppSender,
+    IPendingPaymentMessage pendingPayment,
     IAgentRequestContext requestContext,
     IToolTraceCollector trace)
 {
@@ -91,12 +95,18 @@ public sealed class OrderingTools(
             return result.IsSuccessful ? (object)result.Data! : "NOT_FOUND";
         });
 
-    [Description("Confirm the draft order after the customer has clearly agreed to the summary. Moves it to awaiting payment and returns bank details. Only call this after the customer has said yes to that exact summary.")]
+    [Description("Lock in the draft order after the customer has clearly agreed to the summary. Moves it to AWAITING PAYMENT — not Confirmed, that only happens once the seller approves the payment. The system automatically sends the customer the exact payment/bank-details message right after this call; you don't need to (and shouldn't) retype the account number yourself. Only call this after the customer has said yes to that exact summary.")]
     public Task<object> ConfirmOrderSummary() =>
         TraceAsync(nameof(ConfirmOrderSummary), new { }, async () =>
         {
             var result = await orderService.ConfirmOrderSummaryAsync(requestContext.ShopId, requestContext.CustomerId);
-            return result.IsSuccessful ? (object)result.Data! : "NO_COMPLETE_DRAFT_ORDER";
+            if (!result.IsSuccessful)
+            {
+                return "NO_COMPLETE_DRAFT_ORDER";
+            }
+
+            pendingPayment.Set(result.Data!.PaymentMessage);
+            return (object)result.Data!;
         });
 
     [Description("This customer's recent orders and statuses. Never another customer's.")]
@@ -107,6 +117,23 @@ public sealed class OrderingTools(
             return (object)result.Data!;
         });
 
+    [Description("This customer's saved profile (currently just their name, if known). Call this at the start of a new conversation (no prior history) to check whether you already know them before asking.")]
+    public Task<object> GetCustomerProfile() =>
+        TraceAsync(nameof(GetCustomerProfile), new { }, async () =>
+        {
+            var result = await customerService.GetByIdAsync(requestContext.ShopId, requestContext.CustomerId);
+            return result.IsSuccessful ? (object)new CustomerProfile(result.Data!.Name) : "NOT_FOUND";
+        });
+
+    [Description("Save the customer's name on their profile for future conversations, not just this one. Call this whenever they tell you or correct their name — in addition to passing it to UpsertDraftOrder if they're mid-order.")]
+    public Task<object> SetCustomerName(
+        [Description("The customer's name, as they gave it")] string name) =>
+        TraceAsync(nameof(SetCustomerName), new { name }, async () =>
+        {
+            await customerService.UpdateNameAsync(requestContext.ShopId, requestContext.CustomerId, name);
+            return (object)"OK";
+        });
+
     [Description("Hand this conversation off to the seller — for complaints, refund requests, requests for a human, or anything you're genuinely unsure about. Stay silent on this chat afterwards until the customer raises something new.")]
     public Task<object> RequestHandoff(
         [Description("Short machine-facing reason, e.g. 'refund_request'")] string reason,
@@ -114,6 +141,32 @@ public sealed class OrderingTools(
         TraceAsync(nameof(RequestHandoff), new { reason, summary }, async () =>
         {
             await handoffService.RequestHandoffAsync(requestContext.ShopId, requestContext.ConversationId, reason, summary);
+            return (object)"OK";
+        });
+
+    [Description("Send the product's photo as a WhatsApp image message, when the customer asks to see it. Returns NO_PHOTO_AVAILABLE if this product has no photo — say so plainly, never invent a description of what the photo shows.")]
+    public Task<object> SendProductImage(
+        [Description("Product id, from a prior SearchProducts or GetProductDetails call")] Guid productId) =>
+        TraceAsync(nameof(SendProductImage), new { productId }, async () =>
+        {
+            var details = await productService.GetDetailsAsync(requestContext.ShopId, productId);
+            if (!details.IsSuccessful)
+            {
+                return "NOT_FOUND";
+            }
+
+            if (details.Data!.PhotoUrl is not { } photoUrl)
+            {
+                return "NO_PHOTO_AVAILABLE";
+            }
+
+            var customer = await customerService.GetByIdAsync(requestContext.ShopId, requestContext.CustomerId);
+            if (!customer.IsSuccessful)
+            {
+                return "NOT_FOUND";
+            }
+
+            await whatsAppSender.SendImageAsync(customer.Data!, photoUrl, details.Data!.Name);
             return (object)"OK";
         });
 

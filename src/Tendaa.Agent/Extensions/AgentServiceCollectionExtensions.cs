@@ -32,6 +32,7 @@ public static class AgentServiceCollectionExtensions
 
         services.AddScoped<IAgentRequestContext, AgentRequestContext>();
         services.AddScoped<IToolTraceCollector, ToolTraceCollector>();
+        services.AddScoped<IPendingPaymentMessage, PendingPaymentMessage>();
         services.AddScoped<OrderingTools>();
 
         services.AddScoped<AIAgent>(sp =>
@@ -53,8 +54,13 @@ public static class AgentServiceCollectionExtensions
                     AIFunctionFactory.Create(tools.ConfirmOrderSummary),
                     AIFunctionFactory.Create(tools.GetMyOrders),
                     AIFunctionFactory.Create(tools.RequestHandoff),
+                    AIFunctionFactory.Create(tools.SendProductImage),
+                    AIFunctionFactory.Create(tools.GetCustomerProfile),
+                    AIFunctionFactory.Create(tools.SetCustomerName),
                 ]);
         });
+
+        services.AddScoped<IAgentTurnRunner, AgentTurnRunner>();
 
         return services;
     }

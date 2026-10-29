@@ -5,6 +5,7 @@ using Tendaa.Agent.Tools;
 using Tendaa.Agent.Tracing;
 using Tendaa.Application.Common;
 using Tendaa.Application.Models;
+using Tendaa.Core.Models.Entities;
 
 namespace Tendaa.Agent.Tests.Tools;
 
@@ -19,13 +20,17 @@ public class OrderingToolsTests
     private readonly FakeShopService _shop = new();
     private readonly FakeOrderService _orders = new();
     private readonly FakeHandoffService _handoffs = new();
+    private readonly FakeCustomerService _customers = new();
+    private readonly FakeWhatsAppSender _sender = new();
+    private readonly PendingPaymentMessage _pendingPayment = new();
     private readonly AgentRequestContext _context = new();
     private readonly ToolTraceCollector _trace = new();
 
     private OrderingTools CreateTools()
     {
         _context.SetIdentity(_shopId, _customerId, "+2340000000", _conversationId);
-        return new OrderingTools(_products, _delivery, _shop, _orders, _handoffs, _context, _trace);
+        return new OrderingTools(
+            _products, _delivery, _shop, _orders, _handoffs, _customers, _sender, _pendingPayment, _context, _trace);
     }
 
     [Fact]
@@ -45,7 +50,7 @@ public class OrderingToolsTests
     [Fact]
     public async Task GetProductDetails_Found_ReturnsDetails()
     {
-        var details = new ProductDetails(Guid.NewGuid(), "Classic Low Sneakers", "Sneakers", null, []);
+        var details = new ProductDetails(Guid.NewGuid(), "Classic Low Sneakers", "Sneakers", null, [], null);
         _products.DetailsResult = TendaaResult<ProductDetails>.Success(details);
 
         var result = await CreateTools().GetProductDetails(details.ProductId);
@@ -66,7 +71,7 @@ public class OrderingToolsTests
     [Fact]
     public async Task GetDeliveryFee_PassesShopIdAndArea()
     {
-        var lookup = new DeliveryFeeLookup(new DeliveryZoneSummary(Guid.NewGuid(), "Lekki", 1500m, "Same day"), []);
+        var lookup = new DeliveryFeeLookup(new DeliveryZoneSummary(Guid.NewGuid(), "Lekki", 1500m, "Same day", "₦1,500"), []);
         _delivery.FeeResult = TendaaResult<DeliveryFeeLookup>.Success(lookup);
 
         var result = await CreateTools().GetDeliveryFee("Lekki");
@@ -102,7 +107,7 @@ public class OrderingToolsTests
     public async Task UpsertDraftOrder_MapsItemsAndPassesIdentity()
     {
         var variantId = Guid.NewGuid();
-        var summary = new OrderSummary(1042, [], 25000m, 1500m, 26500m, "Lekki");
+        var summary = new OrderSummary(1042, [], 25000m, 1500m, 26500m, "Lekki", "₦25,000", "₦1,500", "₦26,500", "Order #1042");
         _orders.UpsertResult = TendaaResult<UpsertDraftOrderResult>.Success(
             new UpsertDraftOrderResult(Guid.NewGuid(), [], [], summary));
 
@@ -125,7 +130,7 @@ public class OrderingToolsTests
     [Fact]
     public async Task GetOrderSummary_Found_ReturnsSummary()
     {
-        var summary = new OrderSummary(1042, [], 25000m, 1500m, 26500m, "Lekki");
+        var summary = new OrderSummary(1042, [], 25000m, 1500m, 26500m, "Lekki", "₦25,000", "₦1,500", "₦26,500", "Order #1042");
         _orders.SummaryResult = TendaaResult<OrderSummary>.Success(summary);
 
         var result = await CreateTools().GetOrderSummary();
@@ -146,7 +151,9 @@ public class OrderingToolsTests
     [Fact]
     public async Task ConfirmOrderSummary_Success_ReturnsBankDetails()
     {
-        var confirm = new ConfirmOrderResult(1042, 26500m, "GTBank", "012345", "Lagos Kicks");
+        var confirm = new ConfirmOrderResult(
+            1042, 26500m, "GTBank", "012345", "Lagos Kicks", "₦26,500",
+            "Order #1042 - ₦26,500\nPay to: GTBank, 012345 (Lagos Kicks)\nSend your receipt here once you've paid.");
         _orders.ConfirmResult = TendaaResult<ConfirmOrderResult>.Success(confirm);
 
         var result = await CreateTools().ConfirmOrderSummary();
@@ -167,7 +174,7 @@ public class OrderingToolsTests
     [Fact]
     public async Task GetMyOrders_PassesCustomerIdFromContext_NeverFromArguments()
     {
-        var status = new OrderStatusSummary(1041, "Delivered", 18000m, DateTimeOffset.UtcNow);
+        var status = new OrderStatusSummary(1041, "Delivered", 18000m, "₦18,000", DateTimeOffset.UtcNow);
         _orders.MyOrdersResult = TendaaResult<IReadOnlyList<OrderStatusSummary>>.Success([status]);
 
         var result = await CreateTools().GetMyOrders();
@@ -185,6 +192,80 @@ public class OrderingToolsTests
         Assert.Equal(_shopId, _handoffs.LastShopId);
         Assert.Equal(_conversationId, _handoffs.LastConversationId);
         Assert.Equal("refund_request", _handoffs.LastReason);
+        Assert.Equal("OK", result);
+    }
+
+    [Fact]
+    public async Task SendProductImage_ProductHasPhoto_SendsImageToCustomer()
+    {
+        var productId = Guid.NewGuid();
+        var customer = new Customer { Id = _customerId, ShopId = _shopId, BsuId = "bsuid-1", PhoneNumber = "+2340000000" };
+        _products.DetailsResult = TendaaResult<ProductDetails>.Success(
+            new ProductDetails(productId, "Classic Low Sneakers", "Sneakers", null, [], "https://example.com/photo.jpg"));
+        _customers.GetByIdResult = TendaaResult<Customer>.Success(customer);
+
+        var result = await CreateTools().SendProductImage(productId);
+
+        Assert.Equal("OK", result);
+        var sent = Assert.Single(_sender.SentImages);
+        Assert.Same(customer, sent.Customer);
+        Assert.Equal("https://example.com/photo.jpg", sent.ImageUrl);
+        Assert.Equal("Classic Low Sneakers", sent.Caption);
+    }
+
+    [Fact]
+    public async Task SendProductImage_ProductHasNoPhoto_ReturnsLiteral_SendsNothing()
+    {
+        _products.DetailsResult = TendaaResult<ProductDetails>.Success(
+            new ProductDetails(Guid.NewGuid(), "Canvas High-Tops", "Sneakers", null, [], null));
+
+        var result = await CreateTools().SendProductImage(Guid.NewGuid());
+
+        Assert.Equal("NO_PHOTO_AVAILABLE", result);
+        Assert.Empty(_sender.SentImages);
+    }
+
+    [Fact]
+    public async Task SendProductImage_ProductNotFound_ReturnsNotFoundLiteral()
+    {
+        _products.DetailsResult = TendaaResult<ProductDetails>.NotFound();
+
+        var result = await CreateTools().SendProductImage(Guid.NewGuid());
+
+        Assert.Equal("NOT_FOUND", result);
+        Assert.Empty(_sender.SentImages);
+    }
+
+    [Fact]
+    public async Task GetCustomerProfile_Found_ReturnsName()
+    {
+        var customer = new Customer { Id = _customerId, ShopId = _shopId, BsuId = "bsuid-1", Name = "David" };
+        _customers.GetByIdResult = TendaaResult<Customer>.Success(customer);
+
+        var result = await CreateTools().GetCustomerProfile();
+
+        var profile = Assert.IsType<CustomerProfile>(result);
+        Assert.Equal("David", profile.Name);
+    }
+
+    [Fact]
+    public async Task GetCustomerProfile_NotFound_ReturnsNotFoundLiteral()
+    {
+        _customers.GetByIdResult = TendaaResult<Customer>.NotFound();
+
+        var result = await CreateTools().GetCustomerProfile();
+
+        Assert.Equal("NOT_FOUND", result);
+    }
+
+    [Fact]
+    public async Task SetCustomerName_PassesShopIdCustomerIdAndName()
+    {
+        var result = await CreateTools().SetCustomerName("David");
+
+        Assert.Equal(_shopId, _customers.LastShopId);
+        Assert.Equal(_customerId, _customers.LastCustomerId);
+        Assert.Equal("David", _customers.LastUpdatedName);
         Assert.Equal("OK", result);
     }
 

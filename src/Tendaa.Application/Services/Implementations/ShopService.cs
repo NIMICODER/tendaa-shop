@@ -26,4 +26,12 @@ public sealed class ShopService(IRepository<Shop> shops) : IShopService
         var shop = await shops.Query().FirstOrDefaultAsync(cancellationToken);
         return shop is null ? TendaaResult<Shop>.NotFound() : TendaaResult<Shop>.Success(shop);
     }
+
+    public async Task<TendaaResult<Shop>> GetByPhoneNumberIdAsync(
+        string phoneNumberId, CancellationToken cancellationToken = default)
+    {
+        var shop = await shops.Query()
+            .FirstOrDefaultAsync(s => s.WhatsAppPhoneNumberId == phoneNumberId, cancellationToken);
+        return shop is null ? TendaaResult<Shop>.NotFound() : TendaaResult<Shop>.Success(shop);
+    }
 }

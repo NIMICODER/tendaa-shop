@@ -57,4 +57,56 @@ public sealed class CustomerService(IRepository<Customer> customers, IUnitOfWork
 
         return TendaaResult<Customer>.Success(customer);
     }
+
+    public async Task<TendaaResult<Customer>> LinkBsuIdChangeAsync(
+        Guid shopId,
+        string previousBsuId,
+        string newBsuId,
+        string? newPhone = null,
+        CancellationToken cancellationToken = default)
+    {
+        var customer = await customers.Query()
+            .FirstOrDefaultAsync(c => c.ShopId == shopId && c.BsuId == previousBsuId, cancellationToken);
+
+        if (customer is null)
+        {
+            return TendaaResult<Customer>.NotFound();
+        }
+
+        customer.BsuId = newBsuId;
+        if (newPhone is not null)
+        {
+            customer.PhoneNumber = newPhone;
+        }
+
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return TendaaResult<Customer>.Success(customer);
+    }
+
+    public async Task<TendaaResult<Customer>> GetByIdAsync(
+        Guid shopId, Guid customerId, CancellationToken cancellationToken = default)
+    {
+        var customer = await customers.Query()
+            .FirstOrDefaultAsync(c => c.ShopId == shopId && c.Id == customerId, cancellationToken);
+
+        return customer is null ? TendaaResult<Customer>.NotFound() : TendaaResult<Customer>.Success(customer);
+    }
+
+    public async Task<TendaaResult<Customer>> UpdateNameAsync(
+        Guid shopId, Guid customerId, string name, CancellationToken cancellationToken = default)
+    {
+        var customer = await customers.Query()
+            .FirstOrDefaultAsync(c => c.ShopId == shopId && c.Id == customerId, cancellationToken);
+
+        if (customer is null)
+        {
+            return TendaaResult<Customer>.NotFound();
+        }
+
+        customer.Name = name.Trim();
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return TendaaResult<Customer>.Success(customer);
+    }
 }

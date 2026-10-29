@@ -20,6 +20,7 @@ public sealed class TendaaDbContext(DbContextOptions<TendaaDbContext> options, I
     public DbSet<Message> Messages => Set<Message>();
     public DbSet<ToolTrace> ToolTraces => Set<ToolTrace>();
     public DbSet<Handoff> Handoffs => Set<Handoff>();
+    public DbSet<InboundEvent> InboundEvents => Set<InboundEvent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

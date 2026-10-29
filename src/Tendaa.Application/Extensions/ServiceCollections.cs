@@ -1,8 +1,11 @@
-﻿using Microsoft.AspNetCore.Builder;
+﻿using System.Net.Http.Headers;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Serilog;
+using Tendaa.Application.Inbox;
 using Tendaa.Application.Services.Implementations;
 using Tendaa.Application.Services.Interfaces;
 using Tendaa.Core;
@@ -11,6 +14,7 @@ using Tendaa.Infrastructure;
 using Tendaa.Infrastructure.Context;
 using Tendaa.Infrastructure.Data.Implementations;
 using Tendaa.Infrastructure.Data.Interfaces;
+using Tendaa.Infrastructure.WhatsApp;
 
 namespace Tendaa.Application.Extensions;
 
@@ -32,6 +36,10 @@ public static class ServiceCollections
             .Bind(configuration.GetSection(DashboardOptions.SectionName))
             .ValidateDataAnnotations()
             .ValidateOnStart();
+        services.AddOptions<AgentOptions>()
+            .Bind(configuration.GetSection(AgentOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
 
         return services;
     }
@@ -43,6 +51,13 @@ public static class ServiceCollections
             options.UseNpgsql(configuration.GetConnectionString("Postgres")));
         services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
         services.AddScoped<IUnitOfWork, UnitOfWork>();
+
+        services.AddHttpClient<IWhatsAppSender, WhatsAppGraphApiClient>((sp, client) =>
+        {
+            var options = sp.GetRequiredService<IOptions<WhatsAppOptions>>().Value;
+            client.BaseAddress = new Uri("https://graph.facebook.com/");
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", options.AccessToken);
+        });
 
         return services;
     }
@@ -58,6 +73,8 @@ public static class ServiceCollections
         services.AddScoped<IOrderService, OrderService>();
         services.AddScoped<IHandoffService, HandoffService>();
         services.AddScoped<IConversationService, ConversationService>();
+        services.AddScoped<IInboundEventService, InboundEventService>();
+        services.AddSingleton<InboundEventChannel>();
 
         return services;
     }

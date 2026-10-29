@@ -18,7 +18,7 @@ public class OrderServiceTests : SqliteApplicationTestBase
         CreateRepository<Product>(),
         CreateRepository<Shop>(),
         CreateRepository<DeliveryZone>(),
-        new DeliveryService(CreateRepository<DeliveryZone>()),
+        new DeliveryService(CreateRepository<DeliveryZone>(), CreateRepository<Shop>()),
         CreateUnitOfWork());
 
     private async Task SeedAsync()
@@ -154,5 +154,42 @@ public class OrderServiceTests : SqliteApplicationTestBase
         var persisted = await Db.Orders.FirstAsync(o => o.CustomerId == _customerId);
         Assert.Equal(OrderStatus.AwaitingPayment, persisted.Status);
         Assert.NotNull(persisted.AwaitingPaymentAt);
+    }
+
+    [Fact]
+    public async Task ConfirmOrderSummary_Success_PaymentMessageHasExactAccountNumber_NoConfirmedWord()
+    {
+        await SeedAsync();
+        var shop = await Db.Shops.FindAsync(_shopId);
+        shop!.BankName = "GTBank";
+        shop.BankAccountNumber = "0123456789";
+        shop.BankAccountName = "Lagos Kicks Ventures";
+        await Db.SaveChangesAsync();
+
+        var items = new List<OrderItemInput> { new(_variantId, 1) };
+        await CreateService().UpsertDraftOrderAsync(_shopId, _customerId, items, "Tolu", "Lekki", null);
+
+        var result = await CreateService().ConfirmOrderSummaryAsync(_shopId, _customerId);
+
+        Assert.True(result.IsSuccessful);
+        Assert.Contains("0123456789", result.Data!.PaymentMessage);
+        Assert.Contains("GTBank", result.Data!.PaymentMessage);
+        Assert.DoesNotContain("confirm", result.Data!.PaymentMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("₦26,500", result.Data!.FormattedGrandTotal);
+    }
+
+    [Fact]
+    public async Task UpsertDraftOrder_AllKnownAndInStock_SummaryTextIsFormattedInCode()
+    {
+        await SeedAsync();
+        var items = new List<OrderItemInput> { new(_variantId, 2) };
+
+        var result = await CreateService().UpsertDraftOrderAsync(_shopId, _customerId, items, "Tolu", "Lekki", null);
+
+        var summaryText = result.Data!.Summary!.SummaryText;
+        Assert.Contains("₦50,000", summaryText);
+        Assert.Contains("₦1,500", summaryText);
+        Assert.Contains("₦51,500", summaryText);
+        Assert.Equal("₦50,000", result.Data!.Summary!.FormattedItemTotal);
     }
 }

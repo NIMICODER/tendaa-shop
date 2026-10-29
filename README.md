@@ -56,3 +56,16 @@ No values are listed here — ask a project maintainer for the real ones.
 | `WhatsApp:VerifyToken` | Token checked on the webhook's `GET` verification challenge |
 | `ConnectionStrings:Postgres` | PostgreSQL connection string (matches `docker-compose.yml` for local dev) |
 | `Dashboard:AdminPassword` | Password for the seller dashboard's cookie login |
+| `Agent:StaleConversationHours` | Optional, defaults to `12`. How long a conversation sits idle before the next message starts a fresh agent session instead of continuing the old one |
+
+## WhatsApp webhook setup
+
+For local development, expose the running app with a tunnel (cloudflared or ngrok) and register
+`<tunnel-url>/webhooks/whatsapp` as the Callback URL in Meta's App Dashboard (WhatsApp →
+Configuration → Webhook), with `WhatsApp:VerifyToken`'s value as the Verify token. Subscribe to
+the `messages` field.
+
+Then **subscribe the app to your WhatsApp Business Account**: `POST
+/{waba-id}/subscribed_apps`. Meta's test numbers come subscribed to Meta's own demo app, so this
+step is required even after the webhook URL itself is verified — without it, messages are
+accepted by Meta but never delivered to this app's webhook.

@@ -40,4 +40,9 @@ public sealed class HandoffService(IRepository<Handoff> handoffs, IUnitOfWork un
 
         return TendaaResult.Success();
     }
+
+    public async Task<bool> HasOpenHandoffAsync(
+        Guid shopId, Guid conversationId, CancellationToken cancellationToken = default) =>
+        await handoffs.Query()
+            .AnyAsync(h => h.ShopId == shopId && h.ConversationId == conversationId && h.Status == HandoffStatus.Open, cancellationToken);
 }

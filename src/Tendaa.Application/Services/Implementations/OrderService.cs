@@ -4,6 +4,7 @@ using Tendaa.Application.Models;
 using Tendaa.Application.Services.Interfaces;
 using Tendaa.Core.Models.Entities;
 using Tendaa.Core.Models.Enums.Orders;
+using Tendaa.Core.Money;
 using Tendaa.Core.Orders;
 using Tendaa.Infrastructure.Data.Interfaces;
 
@@ -26,6 +27,9 @@ public sealed class OrderService(
         string? address,
         CancellationToken cancellationToken = default)
     {
+        var shop = await shops.GetByIdAsync(shopId, cancellationToken);
+        var currency = shop?.Currency ?? "NGN";
+
         var order = await orders.Query()
             .Include(o => o.Items)
             .Where(o => o.ShopId == shopId && o.CustomerId == customerId && o.Status == OrderStatus.Draft)
@@ -68,7 +72,9 @@ public sealed class OrderService(
             var existingZone = await deliveryZones.GetByIdAsync(existingZoneId, cancellationToken);
             if (existingZone is not null)
             {
-                matchedZone = new DeliveryZoneSummary(existingZone.Id, existingZone.Name, existingZone.Fee, existingZone.DeliveryTimeText);
+                matchedZone = new DeliveryZoneSummary(
+                    existingZone.Id, existingZone.Name, existingZone.Fee, existingZone.DeliveryTimeText,
+                    MoneyFormatter.Format(existingZone.Fee, currency));
             }
         }
 
@@ -94,7 +100,7 @@ public sealed class OrderService(
             {
                 var alternatives = found.Product.Variants
                     .Where(v => v.Id != found.Variant.Id && v.Stock > 0)
-                    .Select(v => ToVariantStock(v, found.Product.Price))
+                    .Select(v => ToVariantStock(v, found.Product.Price, currency))
                     .ToList();
                 stockIssues.Add(new StockIssue(
                     found.Variant.Id,
@@ -145,7 +151,7 @@ public sealed class OrderService(
             order.DeliveryFee = totals.DeliveryFee;
             order.GrandTotal = totals.GrandTotal;
 
-            summary = BuildSummary(order, resolvedLines);
+            summary = BuildSummary(order, resolvedLines, currency);
         }
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -185,26 +191,52 @@ public sealed class OrderService(
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         var shop = await shops.GetByIdAsync(shopId, cancellationToken);
+        var formattedGrandTotal = MoneyFormatter.Format(order.GrandTotal, shop?.Currency ?? "NGN");
+        var paymentMessage = BuildPaymentMessage(
+            order.Number, formattedGrandTotal, shop?.BankName, shop?.BankAccountNumber, shop?.BankAccountName);
 
         var result = new ConfirmOrderResult(
             order.Number,
             order.GrandTotal,
             shop?.BankName,
             shop?.BankAccountNumber,
-            shop?.BankAccountName);
+            shop?.BankAccountName,
+            formattedGrandTotal,
+            paymentMessage);
 
         return TendaaResult<ConfirmOrderResult>.Success(result);
     }
 
+    /// <summary>The exact text the customer must receive for payment — built here in code, never
+    /// left to the model to type or paraphrase. Never mentions "confirm"/"confirmed": that word is
+    /// reserved for after the seller approves the payment (<see cref="OrderStatus.Confirmed"/>),
+    /// which only a <see cref="OrderActor.Seller"/> can reach.</summary>
+    private static string BuildPaymentMessage(
+        int orderNumber, string formattedGrandTotal, string? bankName, string? bankAccountNumber, string? bankAccountName) =>
+        string.Join('\n',
+        [
+            $"Order #{orderNumber} - {formattedGrandTotal}",
+            $"Pay to: {bankName}, {bankAccountNumber} ({bankAccountName})",
+            "Send your receipt here once you've paid.",
+        ]);
+
     public async Task<TendaaResult<IReadOnlyList<OrderStatusSummary>>> GetMyOrdersAsync(
         Guid shopId, Guid customerId, CancellationToken cancellationToken = default)
     {
-        var list = await orders.Query()
+        var shop = await shops.GetByIdAsync(shopId, cancellationToken);
+        var currency = shop?.Currency ?? "NGN";
+
+        var rows = await orders.Query()
             .Where(o => o.ShopId == shopId && o.CustomerId == customerId)
             .OrderByDescending(o => o.CreatedAt)
             .Take(10)
-            .Select(o => new OrderStatusSummary(o.Number, o.Status.ToString(), o.GrandTotal, o.CreatedAt))
+            .Select(o => new { o.Number, Status = o.Status.ToString(), o.GrandTotal, o.CreatedAt })
             .ToListAsync(cancellationToken);
+
+        IReadOnlyList<OrderStatusSummary> list = rows
+            .Select(o => new OrderStatusSummary(
+                o.Number, o.Status, o.GrandTotal, MoneyFormatter.Format(o.GrandTotal, currency), o.CreatedAt))
+            .ToList();
 
         return TendaaResult<IReadOnlyList<OrderStatusSummary>>.Success(list);
     }
@@ -219,6 +251,9 @@ public sealed class OrderService(
 
     private async Task<OrderSummary> BuildSummaryFromOrderAsync(Order order, Guid shopId, CancellationToken cancellationToken)
     {
+        var shop = await shops.GetByIdAsync(shopId, cancellationToken);
+        var currency = shop?.Currency ?? "NGN";
+
         var variantIds = order.Items.Select(i => i.ProductVariantId).ToList();
         var shopProducts = await products.Query()
             .Where(p => p.ShopId == shopId)
@@ -238,31 +273,58 @@ public sealed class OrderService(
             })
             .ToList();
 
-        return new OrderSummary(
-            order.Number,
-            lines.Select(l => new OrderSummaryItem(
-                l.Variant.Id, l.Product.Name, l.Variant.Size, l.Variant.Colour, l.Quantity,
-                l.Variant.PriceOverride ?? l.Product.Price,
-                (l.Variant.PriceOverride ?? l.Product.Price) * l.Quantity)).ToList(),
-            order.ItemTotal,
-            order.DeliveryFee,
-            order.GrandTotal,
-            order.Address);
+        return BuildSummary(order, lines, currency);
     }
 
     private static OrderSummary BuildSummary(
         Order order,
-        List<(ProductVariant Variant, Product Product, int Quantity)> lines) =>
-        new(
-            order.Number,
-            lines.Select(l => new OrderSummaryItem(
+        List<(ProductVariant Variant, Product Product, int Quantity)> lines,
+        string currency)
+    {
+        var items = lines.Select(l =>
+        {
+            var unitPrice = l.Variant.PriceOverride ?? l.Product.Price;
+            var lineTotal = unitPrice * l.Quantity;
+            return new OrderSummaryItem(
                 l.Variant.Id, l.Product.Name, l.Variant.Size, l.Variant.Colour, l.Quantity,
-                l.Variant.PriceOverride ?? l.Product.Price,
-                (l.Variant.PriceOverride ?? l.Product.Price) * l.Quantity)).ToList(),
-            order.ItemTotal,
-            order.DeliveryFee,
-            order.GrandTotal,
-            order.Address);
+                unitPrice, lineTotal,
+                MoneyFormatter.Format(unitPrice, currency), MoneyFormatter.Format(lineTotal, currency));
+        }).ToList();
+
+        var formattedItemTotal = MoneyFormatter.Format(order.ItemTotal, currency);
+        var formattedDeliveryFee = MoneyFormatter.Format(order.DeliveryFee, currency);
+        var formattedGrandTotal = MoneyFormatter.Format(order.GrandTotal, currency);
+
+        var summaryText = BuildSummaryText(order.Number, items, formattedItemTotal, formattedDeliveryFee, formattedGrandTotal);
+
+        return new OrderSummary(
+            order.Number, items, order.ItemTotal, order.DeliveryFee, order.GrandTotal, order.Address,
+            formattedItemTotal, formattedDeliveryFee, formattedGrandTotal, summaryText);
+    }
+
+    private static string BuildSummaryText(
+        int orderNumber,
+        IReadOnlyList<OrderSummaryItem> items,
+        string formattedItemTotal,
+        string formattedDeliveryFee,
+        string formattedGrandTotal)
+    {
+        var lines = items.Select(i =>
+        {
+            var variant = string.Join(" ", new[] { i.Size, i.Colour }.Where(s => !string.IsNullOrWhiteSpace(s)));
+            var variantSuffix = variant.Length == 0 ? "" : $" ({variant})";
+            return $"{i.Quantity} x {i.ProductName}{variantSuffix} - {i.FormattedLineTotal}";
+        });
+
+        return string.Join('\n', new[]
+        {
+            $"Order #{orderNumber}",
+            string.Join('\n', lines),
+            $"Items: {formattedItemTotal}",
+            $"Delivery: {formattedDeliveryFee}",
+            $"Total: {formattedGrandTotal}",
+        });
+    }
 
     private async Task<int> NextOrderNumberAsync(Guid shopId, CancellationToken cancellationToken)
     {
@@ -274,8 +336,11 @@ public sealed class OrderService(
         return (max ?? 0) + 1;
     }
 
-    private static VariantStock ToVariantStock(ProductVariant variant, decimal basePrice) =>
-        new(variant.Id, variant.Size, variant.Colour, variant.Stock, variant.PriceOverride ?? basePrice);
+    private static VariantStock ToVariantStock(ProductVariant variant, decimal basePrice, string currency)
+    {
+        var price = variant.PriceOverride ?? basePrice;
+        return new(variant.Id, variant.Size, variant.Colour, variant.Stock, price, MoneyFormatter.Format(price, currency));
+    }
 
     private static string DescribeVariant(ProductVariant variant) =>
         string.Join(" ", new[] { variant.Size, variant.Colour }.Where(s => !string.IsNullOrWhiteSpace(s)));

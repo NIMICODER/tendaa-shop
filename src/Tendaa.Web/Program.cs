@@ -1,9 +1,12 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Serilog;
 using Tendaa.Agent.Extensions;
 using Tendaa.Application.Extensions;
+using Tendaa.Core.Configurations.ConfigModels;
 using Tendaa.Infrastructure.Context;
 using Tendaa.Infrastructure.SeedData;
+using Tendaa.Web.HostedServices;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -18,6 +21,7 @@ builder.Services.BindOptions(builder.Configuration);
 builder.Services.RegisterInfrastructure(builder.Configuration);
 builder.Services.RegisterServices();
 builder.Services.AddTendaaAgent();
+builder.Services.AddHostedService<InboundEventProcessingService>();
 
 // TODO (Phase 5): AddAuthentication/AddAuthorization (cookie, admin password), AddAntiforgery,
 // AddSignalR. [Authorize] goes on every /api route and the hub once those exist.
@@ -42,7 +46,8 @@ if (app.Environment.IsDevelopment())
     using (var scope = app.Services.CreateScope())
     {
         var db = scope.ServiceProvider.GetRequiredService<TendaaDbContext>();
-        await DemoDataSeeder.SeedAsync(db);
+        var whatsAppOptions = scope.ServiceProvider.GetRequiredService<IOptions<WhatsAppOptions>>().Value;
+        await DemoDataSeeder.SeedAsync(db, whatsAppOptions.PhoneNumberId);
     }
 }
 

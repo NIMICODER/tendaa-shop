@@ -3,11 +3,12 @@ using Tendaa.Application.Common;
 using Tendaa.Application.Models;
 using Tendaa.Application.Services.Interfaces;
 using Tendaa.Core.Models.Entities;
+using Tendaa.Core.Money;
 using Tendaa.Infrastructure.Data.Interfaces;
 
 namespace Tendaa.Application.Services.Implementations;
 
-public sealed class ProductService(IRepository<Product> products) : IProductService
+public sealed class ProductService(IRepository<Product> products, IRepository<Shop> shops) : IProductService
 {
     public async Task<TendaaResult<IReadOnlyList<ProductSearchItem>>> SearchAsync(
         Guid shopId, string query, CancellationToken cancellationToken = default)
@@ -18,6 +19,7 @@ public sealed class ProductService(IRepository<Product> products) : IProductServ
             return TendaaResult<IReadOnlyList<ProductSearchItem>>.Success([]);
         }
 
+        var currency = await CurrencyAsync(shopId, cancellationToken);
         var shopProducts = await products.Query()
             .Where(p => p.ShopId == shopId)
             .Include(p => p.Variants)
@@ -29,7 +31,7 @@ public sealed class ProductService(IRepository<Product> products) : IProductServ
         // original approach) never found this, the exact phrasing SPEC.md's flow D uses.
         IReadOnlyList<ProductSearchItem> items = shopProducts
             .Where(p => words.All(word => ProductMatchesWord(p, word)))
-            .Select(ToSearchItem)
+            .Select(p => ToSearchItem(p, currency))
             .ToList();
 
         return TendaaResult<IReadOnlyList<ProductSearchItem>>.Success(items);
@@ -56,20 +58,31 @@ public sealed class ProductService(IRepository<Product> products) : IProductServ
             return TendaaResult<ProductDetails>.NotFound();
         }
 
+        var currency = await CurrencyAsync(shopId, cancellationToken);
         var details = new ProductDetails(
             product.Id,
             product.Name,
             product.Category,
             product.Description,
-            product.Variants.Select(v => ToVariantStock(v, product.Price)).ToList());
+            product.Variants.Select(v => ToVariantStock(v, product.Price, currency)).ToList(),
+            product.PhotoUrl);
 
         return TendaaResult<ProductDetails>.Success(details);
     }
 
-    private static ProductSearchItem ToSearchItem(Product product) =>
-        new(product.Id, product.Name, product.Category,
-            product.Variants.Select(v => ToVariantStock(v, product.Price)).ToList());
+    private async Task<string> CurrencyAsync(Guid shopId, CancellationToken cancellationToken)
+    {
+        var shop = await shops.GetByIdAsync(shopId, cancellationToken);
+        return shop?.Currency ?? "NGN";
+    }
 
-    private static VariantStock ToVariantStock(ProductVariant variant, decimal basePrice) =>
-        new(variant.Id, variant.Size, variant.Colour, variant.Stock, variant.PriceOverride ?? basePrice);
+    private static ProductSearchItem ToSearchItem(Product product, string currency) =>
+        new(product.Id, product.Name, product.Category,
+            product.Variants.Select(v => ToVariantStock(v, product.Price, currency)).ToList());
+
+    private static VariantStock ToVariantStock(ProductVariant variant, decimal basePrice, string currency)
+    {
+        var price = variant.PriceOverride ?? basePrice;
+        return new(variant.Id, variant.Size, variant.Colour, variant.Stock, price, MoneyFormatter.Format(price, currency));
+    }
 }

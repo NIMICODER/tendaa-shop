@@ -25,7 +25,6 @@ namespace Tendaa.Infrastructure.Migrations
             modelBuilder.Entity("Tendaa.Core.Models.Entities.Conversation", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<DateTimeOffset>("CreatedAt")
@@ -33,6 +32,9 @@ namespace Tendaa.Infrastructure.Migrations
 
                     b.Property<Guid>("CustomerId")
                         .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("LastMessageAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("SessionJson")
                         .HasColumnType("text");
@@ -48,7 +50,6 @@ namespace Tendaa.Infrastructure.Migrations
             modelBuilder.Entity("Tendaa.Core.Models.Entities.Customer", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<string>("BsuId")
@@ -85,7 +86,6 @@ namespace Tendaa.Infrastructure.Migrations
             modelBuilder.Entity("Tendaa.Core.Models.Entities.DeliveryZone", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<string>("DeliveryTimeText")
@@ -113,7 +113,6 @@ namespace Tendaa.Infrastructure.Migrations
             modelBuilder.Entity("Tendaa.Core.Models.Entities.Handoff", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("ConversationId")
@@ -150,10 +149,57 @@ namespace Tendaa.Infrastructure.Migrations
                     b.ToTable("Handoffs");
                 });
 
+            modelBuilder.Entity("Tendaa.Core.Models.Entities.InboundEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Bsuid")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Error")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTimeOffset?>("ProcessedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RawPayloadJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("ShopId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("WhatsAppMessageId")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WhatsAppMessageId")
+                        .IsUnique();
+
+                    b.ToTable("InboundEvents");
+                });
+
             modelBuilder.Entity("Tendaa.Core.Models.Entities.Message", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("ConversationId")
@@ -200,7 +246,6 @@ namespace Tendaa.Infrastructure.Migrations
             modelBuilder.Entity("Tendaa.Core.Models.Entities.Order", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<string>("Address")
@@ -276,7 +321,6 @@ namespace Tendaa.Infrastructure.Migrations
             modelBuilder.Entity("Tendaa.Core.Models.Entities.OrderItem", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("OrderId")
@@ -305,7 +349,6 @@ namespace Tendaa.Infrastructure.Migrations
             modelBuilder.Entity("Tendaa.Core.Models.Entities.PaymentProof", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<DateTimeOffset>("CreatedAt")
@@ -344,7 +387,6 @@ namespace Tendaa.Infrastructure.Migrations
             modelBuilder.Entity("Tendaa.Core.Models.Entities.Product", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<string>("Category")
@@ -377,7 +419,6 @@ namespace Tendaa.Infrastructure.Migrations
             modelBuilder.Entity("Tendaa.Core.Models.Entities.ProductVariant", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<string>("Colour")
@@ -411,7 +452,6 @@ namespace Tendaa.Infrastructure.Migrations
             modelBuilder.Entity("Tendaa.Core.Models.Entities.Shop", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<string>("BankAccountName")
@@ -463,7 +503,6 @@ namespace Tendaa.Infrastructure.Migrations
             modelBuilder.Entity("Tendaa.Core.Models.Entities.ToolTrace", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<string>("ArgumentsJson")

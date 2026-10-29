@@ -1,10 +1,11 @@
-﻿using Microsoft.Agents.AI;
+﻿using System.Net.Http.Headers;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
-using Tendaa.Agent.Context;
-using Tendaa.Agent.Tracing;
+using Microsoft.Extensions.Options;
+using Tendaa.Agent;
 using Tendaa.Application.Services.Interfaces;
 using Tendaa.Core;
+using Tendaa.Core.Configurations.ConfigModels;
 
 namespace Tendaa.Web.Controllers;
 
@@ -23,9 +24,9 @@ public sealed class DevController(
     ICustomerService customerService,
     IConversationService conversationService,
     ICurrentShopAccessor currentShopAccessor,
-    IAgentRequestContext requestContext,
-    IToolTraceCollector trace,
-    AIAgent agent,
+    IAgentTurnRunner agentTurnRunner,
+    IHttpClientFactory httpClientFactory,
+    IOptions<WhatsAppOptions> whatsAppOptions,
     IWebHostEnvironment environment) : ControllerBase
 {
     [HttpGet("ping-model")]
@@ -65,15 +66,61 @@ public sealed class DevController(
         var conversation = (await conversationService.GetOrCreateAsync(
             shop.Id, customer.Id, cancellationToken)).Data!;
 
-        requestContext.SetIdentity(shop.Id, customer.Id, customer.PhoneNumber, conversation.Id);
+        var reply = await agentTurnRunner.RunTurnAsync(
+            shop.Id, customer.Id, customer.PhoneNumber, conversation, request.Message, cancellationToken);
 
-        var session = await conversationService.LoadSessionAsync(agent, conversation, cancellationToken);
-        var response = await agent.RunAsync(request.Message, session, cancellationToken: cancellationToken);
+        return Ok(new ChatResponse(reply));
+    }
 
-        await conversationService.SaveSessionAsync(agent, conversation, session, cancellationToken);
-        await conversationService.SaveTurnAsync(
-            shop.Id, conversation.Id, request.Message, response.Text, trace.Entries, cancellationToken);
+    /// <summary>Intentional head-start for multi-seller onboarding, not leftover debugging: every
+    /// seller's WABA needs this same check (webhook URL verification and WABA-to-app subscription
+    /// are separate Graph API steps — a configured webhook alone doesn't mean events arrive).
+    /// `GET /{WabaId}/subscribed_apps`. Never logs or returns the access token itself.</summary>
+    [HttpGet("whatsapp/subscribed-apps")]
+    public async Task<IActionResult> GetSubscribedApps(CancellationToken cancellationToken)
+    {
+        if (!environment.IsDevelopment())
+        {
+            return NotFound();
+        }
 
-        return Ok(new ChatResponse(response.Text));
+        return await CallGraphApiAsync(HttpMethod.Get, cancellationToken);
+    }
+
+    /// <summary>Intentional head-start for multi-seller onboarding, not leftover debugging:
+    /// subscribes this app to the configured WABA's webhooks — Meta's test numbers come
+    /// pre-subscribed to Meta's own demo app, so this is required for every seller's WABA, even
+    /// after their webhook URL is verified. Additive: doesn't remove any other app's subscription.
+    /// A real onboarding flow will call this per-seller instead of against one fixed WABA.</summary>
+    [HttpPost("whatsapp/subscribed-apps")]
+    public async Task<IActionResult> SubscribeApp(CancellationToken cancellationToken)
+    {
+        if (!environment.IsDevelopment())
+        {
+            return NotFound();
+        }
+
+        return await CallGraphApiAsync(HttpMethod.Post, cancellationToken);
+    }
+
+    private async Task<IActionResult> CallGraphApiAsync(HttpMethod method, CancellationToken cancellationToken)
+    {
+        var options = whatsAppOptions.Value;
+        using var request = new HttpRequestMessage(
+            method, $"{options.GraphApiVersion}/{options.WabaId}/subscribed_apps");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", options.AccessToken);
+
+        var client = httpClientFactory.CreateClient();
+        client.BaseAddress = new Uri("https://graph.facebook.com/");
+
+        using var response = await client.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        return new ContentResult
+        {
+            Content = body,
+            ContentType = "application/json",
+            StatusCode = (int)response.StatusCode,
+        };
     }
 }

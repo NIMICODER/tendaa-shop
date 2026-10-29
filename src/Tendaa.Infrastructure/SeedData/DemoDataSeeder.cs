@@ -9,10 +9,20 @@ namespace Tendaa.Infrastructure.SeedData;
 /// call on every startup: idempotent, does nothing once a shop already exists.</summary>
 public static class DemoDataSeeder
 {
-    public static async Task SeedAsync(TendaaDbContext db, CancellationToken cancellationToken = default)
+    public static async Task SeedAsync(
+        TendaaDbContext db, string? whatsAppPhoneNumberId, CancellationToken cancellationToken = default)
     {
-        if (await db.Shops.AnyAsync(cancellationToken))
+        var existingShop = await db.Shops.FirstOrDefaultAsync(cancellationToken);
+        if (existingShop is not null)
         {
+            // Backfill for a shop seeded before WhatsAppPhoneNumberId was added to this seeder
+            // (Phase 3) — self-healing on the next startup rather than needing a manual UPDATE.
+            if (existingShop.WhatsAppPhoneNumberId is null && whatsAppPhoneNumberId is not null)
+            {
+                existingShop.WhatsAppPhoneNumberId = whatsAppPhoneNumberId;
+                await db.SaveChangesAsync(cancellationToken);
+            }
+
             return;
         }
 
@@ -31,6 +41,9 @@ public static class DemoDataSeeder
             BankName = "GTBank",
             BankAccountNumber = "0123456789",
             BankAccountName = "Lagos Kicks Ventures",
+            // The actual configured WhatsApp test number's phone_number_id, so inbound webhooks
+            // can resolve which shop they belong to — never a hardcoded value.
+            WhatsAppPhoneNumberId = whatsAppPhoneNumberId,
             CreatedAt = DateTimeOffset.UtcNow,
         };
         db.Shops.Add(shop);
@@ -46,7 +59,8 @@ public static class DemoDataSeeder
 
         db.Products.AddRange(
             Product(shop.Id, "Classic Low Sneakers", "Sneakers", 25000m,
-                SizeVariants(shop.Id, "Black", 40, 44, stockPerSize: 4)),
+                SizeVariants(shop.Id, "Black", 40, 44, stockPerSize: 4),
+                "https://images.unsplash.com/photo-1549298916-b41d501d3772?w=800"),
             Product(shop.Id, "Canvas High-Tops", "Sneakers", 22000m,
                 SizeVariants(shop.Id, "White", 40, 44, stockPerSize: 3)),
             Product(shop.Id, "Running Trainers", "Sneakers", 32000m,
@@ -56,13 +70,16 @@ public static class DemoDataSeeder
             Product(shop.Id, "Suede Desert Boots", "Boots", 35000m,
                 SizeVariants(shop.Id, "Tan", 41, 45, stockPerSize: 2)),
             Product(shop.Id, "Crossbody Bag", "Bags", 18000m,
-                ColourVariants(shop.Id, ["Black", "Brown", "Tan"], stockPerColour: 5)),
+                ColourVariants(shop.Id, ["Black", "Brown", "Tan"], stockPerColour: 5),
+                "https://images.unsplash.com/photo-1591561954557-26941169b49e?w=800"),
             Product(shop.Id, "Tote Bag", "Bags", 21000m,
                 ColourVariants(shop.Id, ["Black", "Beige"], stockPerColour: 5)),
             Product(shop.Id, "Backpack", "Bags", 24000m,
-                ColourVariants(shop.Id, ["Black", "Navy"], stockPerColour: 4)),
+                ColourVariants(shop.Id, ["Black", "Navy"], stockPerColour: 4),
+                "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=800"),
             Product(shop.Id, "Graphic T-Shirt", "Clothing", 8000m,
-                SizeLabelVariants(shop.Id, ["S", "M", "L", "XL"], stockPerSize: 10)),
+                SizeLabelVariants(shop.Id, ["S", "M", "L", "XL"], stockPerSize: 10),
+                "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=800"),
             Product(shop.Id, "Denim Jacket", "Clothing", 30000m,
                 SizeLabelVariants(shop.Id, ["S", "M", "L", "XL"], stockPerSize: 5)),
             Product(shop.Id, "Ankle Socks (3-pack)", "Accessories", 3500m,
@@ -76,8 +93,13 @@ public static class DemoDataSeeder
     private static DeliveryZone Zone(Guid shopId, string name, decimal fee, string deliveryTimeText) =>
         new() { Id = Guid.NewGuid(), ShopId = shopId, Name = name, Fee = fee, DeliveryTimeText = deliveryTimeText };
 
-    private static Product Product(Guid shopId, string name, string category, decimal price, List<ProductVariant> variants) =>
-        new() { Id = Guid.NewGuid(), ShopId = shopId, Name = name, Category = category, Price = price, Variants = variants };
+    private static Product Product(
+        Guid shopId, string name, string category, decimal price, List<ProductVariant> variants, string? photoUrl = null) =>
+        new()
+        {
+            Id = Guid.NewGuid(), ShopId = shopId, Name = name, Category = category, Price = price,
+            Variants = variants, PhotoUrl = photoUrl,
+        };
 
     private static List<ProductVariant> SizeVariants(Guid shopId, string colour, int fromSize, int toSize, int stockPerSize) =>
         Enumerable.Range(fromSize, toSize - fromSize + 1)

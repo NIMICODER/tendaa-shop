@@ -61,11 +61,21 @@ public sealed class ConversationService(
         Guid shopId,
         Guid conversationId,
         string userText,
-        string assistantText,
+        string? assistantText,
         IReadOnlyList<ToolTraceEntry> toolTraces,
         CancellationToken cancellationToken = default)
     {
         var now = DateTimeOffset.UtcNow;
+
+        // Runs on every turn, including the handoff-silent path (assistantText null) — this is
+        // the one place guaranteed to fire per inbound message, so it's where conversation
+        // staleness gets "touched" rather than in SaveSessionAsync, which only runs when the
+        // agent actually replies.
+        var conversation = await conversations.GetByIdAsync(conversationId, cancellationToken);
+        if (conversation is not null)
+        {
+            conversation.LastMessageAt = now;
+        }
 
         var inbound = new Message
         {
@@ -79,31 +89,34 @@ public sealed class ConversationService(
         };
         await messages.AddAsync(inbound, cancellationToken);
 
-        var outboundId = Guid.NewGuid();
-        var outbound = new Message
+        if (assistantText is not null)
         {
-            Id = outboundId,
-            ShopId = shopId,
-            ConversationId = conversationId,
-            Direction = MessageDirection.Outbound,
-            Type = MessageType.Text,
-            Text = assistantText,
-            CreatedAt = now,
-            ToolTraces = toolTraces
-                .Select(t => new ToolTrace
-                {
-                    Id = Guid.NewGuid(),
-                    ShopId = shopId,
-                    MessageId = outboundId,
-                    ToolName = t.ToolName,
-                    ArgumentsJson = t.ArgumentsJson,
-                    ResultJson = t.ResultJson,
-                    DurationMs = t.DurationMs,
-                    CreatedAt = now,
-                })
-                .ToList(),
-        };
-        await messages.AddAsync(outbound, cancellationToken);
+            var outboundId = Guid.NewGuid();
+            var outbound = new Message
+            {
+                Id = outboundId,
+                ShopId = shopId,
+                ConversationId = conversationId,
+                Direction = MessageDirection.Outbound,
+                Type = MessageType.Text,
+                Text = assistantText,
+                CreatedAt = now,
+                ToolTraces = toolTraces
+                    .Select(t => new ToolTrace
+                    {
+                        Id = Guid.NewGuid(),
+                        ShopId = shopId,
+                        MessageId = outboundId,
+                        ToolName = t.ToolName,
+                        ArgumentsJson = t.ArgumentsJson,
+                        ResultJson = t.ResultJson,
+                        DurationMs = t.DurationMs,
+                        CreatedAt = now,
+                    })
+                    .ToList(),
+            };
+            await messages.AddAsync(outbound, cancellationToken);
+        }
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
     }

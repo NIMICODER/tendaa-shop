@@ -17,7 +17,12 @@ How Tendaa is built, and why. Read with `SPEC.md` (what it does) and `PLAN.md` (
    business-scoped user ID, not phone number) are processed in order; different customers run in
    parallel.
 5. **Multi-tenant from day one.** Every row has a `ShopId`. The MVP has one shop; going live
-   means adding onboarding, not rewriting.
+   means adding onboarding, not rewriting. One concrete onboarding step this implies: each new
+   seller's WhatsApp Business Account must be subscribed to Tendaa's app via `POST
+   /{waba-id}/subscribed_apps` (Graph API) before their webhook events will arrive — configuring
+   the webhook URL in the Meta dashboard alone isn't enough, since WABAs (notably Meta's
+   auto-provisioned test numbers) start subscribed to Meta's own demo app, not a developer's.
+   Post-hackathon, seller onboarding needs to make this call per-WABA, not just once.
 
 ## Components
 

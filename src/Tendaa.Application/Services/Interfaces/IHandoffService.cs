@@ -12,4 +12,10 @@ public interface IHandoffService
         string reason,
         string summary,
         CancellationToken cancellationToken = default);
+
+    /// <summary>Whether this conversation has an open handoff — the webhook processor checks
+    /// this before running the agent, per SPEC.md rule 7 ("stays silent on handed-off chats until
+    /// resolved") and ARCHITECTURE.md's sequence diagram <c>alt conversation handed off</c>
+    /// branch.</summary>
+    Task<bool> HasOpenHandoffAsync(Guid shopId, Guid conversationId, CancellationToken cancellationToken = default);
 }

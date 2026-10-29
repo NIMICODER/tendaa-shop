@@ -1,7 +1,8 @@
-using Tendaa.Agent.Tools;
+﻿using Tendaa.Agent.Tools;
 using Tendaa.Application.Common;
 using Tendaa.Application.Models;
 using Tendaa.Application.Services.Interfaces;
+using Tendaa.Core;
 using Tendaa.Core.Models.Entities;
 
 namespace Tendaa.Agent.Tests.Fakes;
@@ -61,6 +62,7 @@ public sealed class FakeShopService : IShopService
 
     public TendaaResult<ShopInfo> InfoResult { get; set; } = TendaaResult<ShopInfo>.NotFound();
     public TendaaResult<Shop> OnlyShopResult { get; set; } = TendaaResult<Shop>.NotFound();
+    public TendaaResult<Shop> ByPhoneNumberIdResult { get; set; } = TendaaResult<Shop>.NotFound();
 
     public Task<TendaaResult<ShopInfo>> GetInfoAsync(Guid shopId, CancellationToken cancellationToken = default)
     {
@@ -70,6 +72,10 @@ public sealed class FakeShopService : IShopService
 
     public Task<TendaaResult<Shop>> GetOnlyShopAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult(OnlyShopResult);
+
+    public Task<TendaaResult<Shop>> GetByPhoneNumberIdAsync(
+        string phoneNumberId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(ByPhoneNumberIdResult);
 }
 
 public sealed class FakeOrderService : IOrderService
@@ -143,6 +149,7 @@ public sealed class FakeHandoffService : IHandoffService
     public string? LastSummary { get; private set; }
 
     public TendaaResult Result { get; set; } = TendaaResult.Success();
+    public bool HasOpenHandoffResult { get; set; }
 
     public Task<TendaaResult> RequestHandoffAsync(
         Guid shopId,
@@ -156,5 +163,72 @@ public sealed class FakeHandoffService : IHandoffService
         LastReason = reason;
         LastSummary = summary;
         return Task.FromResult(Result);
+    }
+
+    public Task<bool> HasOpenHandoffAsync(
+        Guid shopId, Guid conversationId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(HasOpenHandoffResult);
+}
+
+public sealed class FakeCustomerService : ICustomerService
+{
+    public Guid? LastShopId { get; private set; }
+    public Guid? LastCustomerId { get; private set; }
+
+    public TendaaResult<Customer> GetByIdResult { get; set; } = TendaaResult<Customer>.NotFound();
+    public TendaaResult<Customer> UpdateNameResult { get; set; } = TendaaResult<Customer>.NotFound();
+    public string? LastUpdatedName { get; private set; }
+
+    public Task<TendaaResult<Customer>> FindOrCreateByBsuIdAsync(
+        Guid shopId, string bsuId, string? phone = null, string? username = null, string? name = null,
+        CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Not used by OrderingTools tests.");
+
+    public Task<TendaaResult<Customer>> LinkBsuIdChangeAsync(
+        Guid shopId, string previousBsuId, string newBsuId, string? newPhone = null,
+        CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Not used by OrderingTools tests.");
+
+    public Task<TendaaResult<Customer>> GetByIdAsync(
+        Guid shopId, Guid customerId, CancellationToken cancellationToken = default)
+    {
+        LastShopId = shopId;
+        LastCustomerId = customerId;
+        return Task.FromResult(GetByIdResult);
+    }
+
+    public Task<TendaaResult<Customer>> UpdateNameAsync(
+        Guid shopId, Guid customerId, string name, CancellationToken cancellationToken = default)
+    {
+        LastShopId = shopId;
+        LastCustomerId = customerId;
+        LastUpdatedName = name;
+        return Task.FromResult(UpdateNameResult);
+    }
+}
+
+public sealed class FakeWhatsAppSender : IWhatsAppSender
+{
+    public List<(Customer Customer, string Text)> SentTexts { get; } = [];
+    public List<(Customer Customer, string ImageUrl, string? Caption)> SentImages { get; } = [];
+    public List<string> MarkedAsRead { get; } = [];
+
+    public Task SendTextAsync(Customer customer, string text, CancellationToken cancellationToken = default)
+    {
+        SentTexts.Add((customer, text));
+        return Task.CompletedTask;
+    }
+
+    public Task SendImageAsync(
+        Customer customer, string imageUrl, string? caption, CancellationToken cancellationToken = default)
+    {
+        SentImages.Add((customer, imageUrl, caption));
+        return Task.CompletedTask;
+    }
+
+    public Task MarkAsReadAsync(string whatsAppMessageId, CancellationToken cancellationToken = default)
+    {
+        MarkedAsRead.Add(whatsAppMessageId);
+        return Task.CompletedTask;
     }
 }
