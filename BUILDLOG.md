@@ -71,3 +71,42 @@ hackathon".
   names that carry across conversations and automatic fresh-start handling for conversations idle
   more than 12 hours.
 - 262 automated tests passing by end of day.
+
+## Oct 31
+- Voice notes: a customer can now order by sending a voice note instead of typing. WhatsApp's
+  native audio format gets converted (ffmpeg) and transcribed (Muse Voice Transcribe), and the
+  transcript flows through the exact same order-taking path as a typed message.
+- Vision, receipts: one Muse Spark call reads a payment screenshot, pulls out the amount, bank,
+  date and reference, and a separate deterministic check (plain C#, not the model) compares it
+  against the order — matching amount, date on/after the order, reference not reused elsewhere.
+  Only a clean match moves the order to payment review; the model is never the one deciding.
+- Vision, product photos: a second Muse Spark call matches a customer's photo against the shop's
+  own catalog and suggests up to three candidates — every suggested id is checked against the
+  real catalog before the agent ever sees it, so a hallucinated id can't reach the customer.
+- 286 automated tests passing.
+
+## Nov 1
+- Seller dashboard backend: cookie login, every API route behind it, SignalR for live updates.
+  Orders (list, detail, confirm or reject a payment — confirming is the first place in the app
+  that actually reduces stock), a handoff inbox that replies to the customer over WhatsApp and
+  resolves, conversation history with the agent's tool-call trace, catalog editing, and shop
+  settings including delivery zones — all calling the same services the WhatsApp agent uses,
+  no separate set of business rules.
+- A customer-messaging rule that was previously just documented is now enforced in code: a
+  seller's reply from the dashboard only goes out if the customer messaged within Meta's 24-hour
+  window, otherwise it's skipped rather than silently failing.
+
+## Nov 2
+- Seller dashboard frontend: all six pages built and wired to the backend above, plus two pages
+  the plan didn't originally call for — a public landing page explaining what the product does,
+  and a proper login screen — both added because a dashboard a stranger can't understand from the
+  outside isn't actually done.
+- A real visual design pass, not just working-but-plain pages: a studied color and layout
+  direction (not the default scaffold look) applied consistently across the sidebar, every table,
+  every status indicator, the login screen, and the new landing page.
+- Found and fixed a real bug in `.gitignore`: a rule meant to exclude locally-saved receipt
+  photos was also silently matching source folders named "Media" — the entire voice-note and
+  vision codebase, plus its tests, was never going to be committed to git at all. Fixed and
+  confirmed those files are now tracked.
+- 330 of 344 automated tests passing; the other 14 all fail for the same single reason (a
+  database migration that's needed but hasn't been generated yet), not 14 separate bugs.

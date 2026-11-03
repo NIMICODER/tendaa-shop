@@ -202,10 +202,10 @@ than silently eating into Tuesday or Wednesday — evals (Phase 6) are judged to
 |---|---|---|
 | 0 Setup | Done | Committed 69b2565. |
 | 1 Domain and data | Done | Committed 3f33d10; restructure to own conventions in f06e162. |
-| 2 Agent core | Done | All Done-when items verified against real Muse Spark (flow B, D, G); not yet committed. |
-| 3 WhatsApp | Not started | |
-| 4a Voice notes | Not started | |
-| 4b Vision | Not started | |
-| 5 Dashboard + deploy | Not started | |
+| 2 Agent core | Done | All Done-when items verified against real Muse Spark (flow B, D, G); committed adb2ff0. |
+| 3 WhatsApp | Done | Webhook signature verify, durable receipt, crash recovery, real order placed end to end through a real phone number. Committed c537229. |
+| 4a Voice notes | Built, not committed | ffmpeg conversion + Muse Voice Transcribe, full agent-turn integration, automated tests passing. Still needs a live voice-note test on a real phone. |
+| 4b Vision | Built, not committed | Receipt classify+extract+verify (moves order to PaymentReview in code, never the model), product-photo catalog match, both tested. Still needs live receipt/product-photo tests on a real phone. |
+| 5 Dashboard + deploy | Built, not committed | REST API, cookie auth, SignalR, all 6 pages plus a public landing page and a restyled login screen, all built and polished. Blocked on one thing: a missing EF Core migration (`dotnet ef migrations add` + `database update`, run by hand per project convention) before the dashboard's integration tests and a real deploy will work. Not deployed anywhere yet. |
 | 6 Evals | Not started | |
 | 7 Submission | Not started | |

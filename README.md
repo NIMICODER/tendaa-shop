@@ -57,6 +57,7 @@ No values are listed here — ask a project maintainer for the real ones.
 | `ConnectionStrings:Postgres` | PostgreSQL connection string (matches `docker-compose.yml` for local dev) |
 | `Dashboard:AdminPassword` | Password for the seller dashboard's cookie login |
 | `Agent:StaleConversationHours` | Optional, defaults to `12`. How long a conversation sits idle before the next message starts a fresh agent session instead of continuing the old one |
+| `MediaStorage:RootPath` | Optional, defaults to `media-storage`. Local folder where downloaded voice notes and photos are saved during development (gitignored — object storage later) |
 
 ## WhatsApp webhook setup
 

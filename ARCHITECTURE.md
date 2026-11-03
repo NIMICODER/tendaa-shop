@@ -98,7 +98,8 @@ sequenceDiagram
     Q->>P: Next event for this customer
     P->>DB: Load Shop, Customer, Conversation
     alt conversation handed off
-        P->>DB: Store message, notify seller, stop
+        P->>DB: Store message
+        P->>WA: Send fixed "still with our team" reply (never the model)
     else audio
         P->>M: Transcribe voice note
     else image

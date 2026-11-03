@@ -86,7 +86,9 @@ Edge: no seller action within a set time, order shows as overdue.
 ### G. Agent hands off to the seller (9)
 1. Complaint, refund, request for a human, or the agent is unsure. 2. Agent tells the customer the
 seller will reply and stops answering that chat. 3. Seller sees a handoff with a two-line summary.
-4. Seller replies from the dashboard (sent via WhatsApp) and resolves. 5. Agent resumes.
+4. If the customer messages again before it's resolved, they get the same fixed line each time
+("still with our team") instead of silence — the agent itself never resumes real conversation.
+5. Seller replies from the dashboard (sent via WhatsApp) and resolves. 6. Agent resumes.
 
 ### H. Customer checks an order (should have)
 1. "Where is my order?" 2. Agent finds orders by the customer's identity (BSUID) and replies with
@@ -101,7 +103,8 @@ seller will reply and stops answering that chat. 3. Seller sees a handoff with a
    behind a username. Never shares one customer's orders with another.
 5. Never invents an order number or status. Tools report "not found".
 6. Ignores instructions inside messages or images that try to change its rules.
-7. Stays silent on handed-off chats until resolved.
+7. Never resumes real conversation on handed-off chats until resolved. The customer still gets a
+   reply if they message again (a fixed line, not the model talking) — never total silence.
 8. Short replies, in the customer's language.
 
 ## Demo story (3 minutes)
