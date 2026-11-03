@@ -234,9 +234,12 @@ public sealed class OrderService(
         var shop = await shops.GetByIdAsync(shopId, cancellationToken);
         var currency = shop?.Currency ?? "NGN";
 
+        // Order by Number, not CreatedAt: same "most recent" intent, but Number is a plain int,
+        // so it sidesteps the Sqlite provider's refusal to translate ORDER BY on DateTimeOffset
+        // (see CheckReceiptAsync's order lookup above for the same fix, same reason).
         var rows = await orders.Query()
             .Where(o => o.ShopId == shopId && o.CustomerId == customerId)
-            .OrderByDescending(o => o.CreatedAt)
+            .OrderByDescending(o => o.Number)
             .Take(10)
             .Select(o => new { o.Number, Status = o.Status.ToString(), o.GrandTotal, o.CreatedAt })
             .ToListAsync(cancellationToken);
@@ -595,7 +598,9 @@ public sealed class OrderService(
             .Include(o => o.Items)
             .Where(o => o.ShopId == shopId && o.CustomerId == customerId
                 && (o.Status == OrderStatus.Draft || o.Status == OrderStatus.AwaitingPayment))
-            .OrderByDescending(o => o.CreatedAt)
+            // Number, not CreatedAt: Sqlite can't translate ORDER BY over DateTimeOffset (same
+            // fix as CheckReceiptAsync/GetMyOrdersAsync above).
+            .OrderByDescending(o => o.Number)
             .FirstOrDefaultAsync(cancellationToken);
 
     private async Task<OrderSummary> BuildSummaryFromOrderAsync(Order order, Guid shopId, CancellationToken cancellationToken)
