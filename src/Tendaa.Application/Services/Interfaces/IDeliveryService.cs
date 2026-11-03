@@ -10,4 +10,17 @@ public interface IDeliveryService
     /// offer it, rather than a bare not-found.</summary>
     Task<TendaaResult<DeliveryFeeLookup>> GetFeeAsync(
         Guid shopId, string area, CancellationToken cancellationToken = default);
+
+    /// <summary>Dashboard: all delivery zones.</summary>
+    Task<TendaaResult<IReadOnlyList<DeliveryZoneSummary>>> ListZonesAsync(
+        Guid shopId, CancellationToken cancellationToken = default);
+
+    Task<TendaaResult<DeliveryZoneSummary>> CreateZoneAsync(
+        Guid shopId, DeliveryZoneInput input, CancellationToken cancellationToken = default);
+
+    Task<TendaaResult<DeliveryZoneSummary>> UpdateZoneAsync(
+        Guid shopId, Guid zoneId, DeliveryZoneInput input, CancellationToken cancellationToken = default);
+
+    Task<TendaaResult> DeleteZoneAsync(
+        Guid shopId, Guid zoneId, CancellationToken cancellationToken = default);
 }

@@ -8,7 +8,8 @@ using Tendaa.Infrastructure.Data.Interfaces;
 
 namespace Tendaa.Application.Services.Implementations;
 
-public sealed class ProductService(IRepository<Product> products, IRepository<Shop> shops) : IProductService
+public sealed class ProductService(
+    IRepository<Product> products, IRepository<Shop> shops, IUnitOfWork unitOfWork) : IProductService
 {
     public async Task<TendaaResult<IReadOnlyList<ProductSearchItem>>> SearchAsync(
         Guid shopId, string query, CancellationToken cancellationToken = default)
@@ -69,6 +70,197 @@ public sealed class ProductService(IRepository<Product> products, IRepository<Sh
 
         return TendaaResult<ProductDetails>.Success(details);
     }
+
+    public async Task<TendaaResult<IReadOnlyList<ProductCatalogEntry>>> GetCatalogAsync(
+        Guid shopId, CancellationToken cancellationToken = default)
+    {
+        var shopProducts = await products.Query()
+            .Where(p => p.ShopId == shopId)
+            .Include(p => p.Variants)
+            .ToListAsync(cancellationToken);
+
+        IReadOnlyList<ProductCatalogEntry> catalog = shopProducts
+            .Select(p => new ProductCatalogEntry(
+                p.Id,
+                p.Name,
+                p.Category,
+                p.Variants
+                    .Select(v => v.Colour)
+                    .Where(c => !string.IsNullOrWhiteSpace(c))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList()!))
+            .ToList();
+
+        return TendaaResult<IReadOnlyList<ProductCatalogEntry>>.Success(catalog);
+    }
+
+    public async Task<TendaaResult<IReadOnlyList<ProductDashboardItem>>> ListForDashboardAsync(
+        Guid shopId, CancellationToken cancellationToken = default)
+    {
+        var shopProducts = await products.Query()
+            .Where(p => p.ShopId == shopId)
+            .Include(p => p.Variants)
+            .ToListAsync(cancellationToken);
+
+        var currency = await CurrencyAsync(shopId, cancellationToken);
+        IReadOnlyList<ProductDashboardItem> items = shopProducts
+            .OrderBy(p => p.Name)
+            .Select(p => ToDashboardItem(p, currency))
+            .ToList();
+
+        return TendaaResult<IReadOnlyList<ProductDashboardItem>>.Success(items);
+    }
+
+    public async Task<TendaaResult<ProductDashboardItem>> CreateAsync(
+        Guid shopId, ProductInput input, CancellationToken cancellationToken = default)
+    {
+        if (Validate(input) is { } error)
+        {
+            return TendaaResult<ProductDashboardItem>.BadRequest(error);
+        }
+
+        var product = new Product
+        {
+            Id = Guid.NewGuid(),
+            ShopId = shopId,
+            Name = input.Name.Trim(),
+            Category = Clean(input.Category),
+            Description = Clean(input.Description),
+            PhotoUrl = Clean(input.PhotoUrl),
+            Price = input.Price,
+            Variants = input.Variants.Select(v => new ProductVariant
+            {
+                Id = Guid.NewGuid(),
+                ShopId = shopId,
+                Size = Clean(v.Size),
+                Colour = Clean(v.Colour),
+                Stock = v.Stock,
+                PriceOverride = v.PriceOverride,
+            }).ToList(),
+        };
+
+        await products.AddAsync(product, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        var currency = await CurrencyAsync(shopId, cancellationToken);
+        return TendaaResult<ProductDashboardItem>.Success(ToDashboardItem(product, currency));
+    }
+
+    public async Task<TendaaResult<ProductDashboardItem>> UpdateAsync(
+        Guid shopId, Guid productId, ProductInput input, CancellationToken cancellationToken = default)
+    {
+        if (Validate(input) is { } error)
+        {
+            return TendaaResult<ProductDashboardItem>.BadRequest(error);
+        }
+
+        var product = await products.Query()
+            .Where(p => p.ShopId == shopId && p.Id == productId)
+            .Include(p => p.Variants)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (product is null)
+        {
+            return TendaaResult<ProductDashboardItem>.NotFound();
+        }
+
+        product.Name = input.Name.Trim();
+        product.Category = Clean(input.Category);
+        product.Description = Clean(input.Description);
+        product.PhotoUrl = Clean(input.PhotoUrl);
+        product.Price = input.Price;
+
+        var incomingIds = input.Variants
+            .Where(v => v.VariantId.HasValue)
+            .Select(v => v.VariantId!.Value)
+            .ToHashSet();
+        foreach (var removed in product.Variants.Where(v => !incomingIds.Contains(v.Id)).ToList())
+        {
+            product.Variants.Remove(removed);
+        }
+
+        foreach (var variant in input.Variants)
+        {
+            if (variant.VariantId is { } variantId
+                && product.Variants.FirstOrDefault(v => v.Id == variantId) is { } existing)
+            {
+                existing.Size = Clean(variant.Size);
+                existing.Colour = Clean(variant.Colour);
+                existing.Stock = variant.Stock;
+                existing.PriceOverride = variant.PriceOverride;
+            }
+            else
+            {
+                product.Variants.Add(new ProductVariant
+                {
+                    Id = Guid.NewGuid(),
+                    ShopId = shopId,
+                    Size = Clean(variant.Size),
+                    Colour = Clean(variant.Colour),
+                    Stock = variant.Stock,
+                    PriceOverride = variant.PriceOverride,
+                });
+            }
+        }
+
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        var currency = await CurrencyAsync(shopId, cancellationToken);
+        return TendaaResult<ProductDashboardItem>.Success(ToDashboardItem(product, currency));
+    }
+
+    public async Task<TendaaResult> DeleteAsync(
+        Guid shopId, Guid productId, CancellationToken cancellationToken = default)
+    {
+        var product = await products.Query()
+            .Where(p => p.ShopId == shopId && p.Id == productId)
+            .Include(p => p.Variants)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (product is null)
+        {
+            return TendaaResult.NotFound();
+        }
+
+        products.Remove(product);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        return TendaaResult.Success();
+    }
+
+    private static string? Validate(ProductInput input)
+    {
+        if (string.IsNullOrWhiteSpace(input.Name))
+        {
+            return "Product name is required.";
+        }
+
+        if (input.Price < 0)
+        {
+            return "Price cannot be negative.";
+        }
+
+        if (input.Variants.Any(v => v.Stock < 0))
+        {
+            return "Stock cannot be negative.";
+        }
+
+        if (input.Variants.Any(v => v.PriceOverride is < 0))
+        {
+            return "Variant price cannot be negative.";
+        }
+
+        return null;
+    }
+
+    private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static ProductDashboardItem ToDashboardItem(Product product, string currency) =>
+        new(product.Id, product.Name, product.Category, product.Description, product.Price,
+            MoneyFormatter.Format(product.Price, currency), product.PhotoUrl,
+            product.Variants.Select(v =>
+            {
+                var effective = v.PriceOverride ?? product.Price;
+                return new VariantDashboardItem(
+                    v.Id, v.Size, v.Colour, v.Stock, effective, MoneyFormatter.Format(effective, currency));
+            }).ToList());
 
     private async Task<string> CurrencyAsync(Guid shopId, CancellationToken cancellationToken)
     {

@@ -1,5 +1,6 @@
 ﻿using System.Security.Cryptography;
 using System.Text;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Tendaa.Application.Inbox;
@@ -15,6 +16,7 @@ namespace Tendaa.Web.Controllers;
 /// "WhatsApp Cloud API" section.</summary>
 [ApiController]
 [Route("webhooks")]
+[AllowAnonymous]
 public sealed class WebhooksController(
     IOptions<WhatsAppOptions> whatsAppOptions,
     IShopService shopService,

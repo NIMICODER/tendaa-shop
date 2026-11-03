@@ -10,7 +10,7 @@ public class ConversationServiceTests : SqliteApplicationTestBase
     private readonly Guid _customerId = Guid.NewGuid();
 
     private ConversationService CreateService() =>
-        new(CreateRepository<Conversation>(), CreateRepository<Message>(), CreateUnitOfWork());
+        new(CreateRepository<Conversation>(), CreateRepository<Message>(), CreateRepository<Customer>(), CreateRepository<Handoff>(), CreateUnitOfWork());
 
     [Fact]
     public async Task SaveTurnAsync_SetsLastMessageAt_EvenWhenHandedOffWithNoAssistantReply()

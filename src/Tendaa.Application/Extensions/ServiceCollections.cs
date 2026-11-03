@@ -40,6 +40,10 @@ public static class ServiceCollections
             .Bind(configuration.GetSection(AgentOptions.SectionName))
             .ValidateDataAnnotations()
             .ValidateOnStart();
+        services.AddOptions<MediaStorageOptions>()
+            .Bind(configuration.GetSection(MediaStorageOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
 
         return services;
     }
@@ -58,6 +62,10 @@ public static class ServiceCollections
             client.BaseAddress = new Uri("https://graph.facebook.com/");
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", options.AccessToken);
         });
+        // Same typed-client instance also implements media download — resolve it through the
+        // already-configured IWhatsAppSender rather than registering a second HttpClient for it.
+        services.AddScoped<IWhatsAppMediaDownloader>(sp => (IWhatsAppMediaDownloader)sp.GetRequiredService<IWhatsAppSender>());
+        services.AddScoped<IMediaStore, LocalDiskMediaStore>();
 
         return services;
     }
@@ -72,6 +80,7 @@ public static class ServiceCollections
         services.AddScoped<IShopService, ShopService>();
         services.AddScoped<IOrderService, OrderService>();
         services.AddScoped<IHandoffService, HandoffService>();
+        services.AddScoped<ICustomerMessenger, CustomerMessenger>();
         services.AddScoped<IConversationService, ConversationService>();
         services.AddScoped<IInboundEventService, InboundEventService>();
         services.AddSingleton<InboundEventChannel>();

@@ -1,10 +1,12 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Tendaa.Application.Services.Interfaces;
 
 namespace Tendaa.Web.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[AllowAnonymous]
 public sealed class HealthController(IHealthService healthService) : ControllerBase
 {
     [HttpGet]

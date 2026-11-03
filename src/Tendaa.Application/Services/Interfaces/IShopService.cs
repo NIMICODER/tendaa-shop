@@ -17,4 +17,12 @@ public interface IShopService
     /// <c>metadata.phone_number_id</c>. <see cref="TendaaResult{T}.NotFound"/> if no shop is
     /// configured with that number.</summary>
     Task<TendaaResult<Shop>> GetByPhoneNumberIdAsync(string phoneNumberId, CancellationToken cancellationToken = default);
+
+    /// <summary>Dashboard: the shop's seller-editable settings.</summary>
+    Task<TendaaResult<ShopSettings>> GetSettingsAsync(Guid shopId, CancellationToken cancellationToken = default);
+
+    /// <summary>Dashboard: updates seller-editable shop fields. WhatsAppPhoneNumberId is infra
+    /// config, not seller-editable, so it can't be changed here.</summary>
+    Task<TendaaResult<ShopSettings>> UpdateAsync(
+        Guid shopId, ShopSettingsInput input, CancellationToken cancellationToken = default);
 }
