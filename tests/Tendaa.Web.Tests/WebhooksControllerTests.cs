@@ -191,7 +191,8 @@ public class WebhooksControllerTests
                                         messageId, From: null, FromUserId: null, "system", Text: null,
                                         System: new WhatsAppSystem(
                                             Type: "user_changed_user_id", WaId: "16505551234",
-                                            UserId: newBsuid, PreviousUserId: previousBsuid)),
+                                            UserId: newBsuid, PreviousUserId: previousBsuid),
+                                        Audio: null, Image: null),
                                 ])),
                     ]),
             ]);
@@ -242,7 +243,8 @@ public class WebhooksControllerTests
                                 Messages:
                                 [
                                     new WhatsAppMessage(
-                                        messageId, phone, bsuid, "text", new WhatsAppTextBody(text), System: null),
+                                        messageId, phone, bsuid, "text", new WhatsAppTextBody(text), System: null,
+                                        Audio: null, Image: null),
                                 ])),
                     ]),
             ]);

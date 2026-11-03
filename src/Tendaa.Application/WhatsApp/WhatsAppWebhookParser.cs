@@ -62,6 +62,24 @@ public static class WhatsAppWebhookParser
                 contact?.WaId, contact?.Profile?.Name, contact?.Profile?.Username);
         }
 
+        if (message.Type == "audio" && message.Audio is { Id: { } audioMediaId }
+            && !string.IsNullOrWhiteSpace(message.FromUserId))
+        {
+            var contact = contacts.FirstOrDefault(c => c.UserId == message.FromUserId);
+            return new ParsedVoiceMessage(
+                message.Id, message.FromUserId, audioMediaId,
+                contact?.WaId, contact?.Profile?.Name, contact?.Profile?.Username);
+        }
+
+        if (message.Type == "image" && message.Image is { Id: { } imageMediaId }
+            && !string.IsNullOrWhiteSpace(message.FromUserId))
+        {
+            var contact = contacts.FirstOrDefault(c => c.UserId == message.FromUserId);
+            return new ParsedImageMessage(
+                message.Id, message.FromUserId, imageMediaId, message.Image.Caption,
+                contact?.WaId, contact?.Profile?.Name, contact?.Profile?.Username);
+        }
+
         var bsuid = message.FromUserId ?? message.System?.UserId;
         return string.IsNullOrWhiteSpace(bsuid)
             ? null

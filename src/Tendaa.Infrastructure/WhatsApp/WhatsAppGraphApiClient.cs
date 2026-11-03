@@ -11,7 +11,8 @@ namespace Tendaa.Infrastructure.WhatsApp;
 /// <summary>WhatsApp Cloud API client. Confirmed against developers.facebook.com (see CLAUDE.md's
 /// "WhatsApp Cloud API" section) — not the OpenAI-compatible Meta Model API, so a plain
 /// <see cref="HttpClient"/>, not the OpenAI SDK.</summary>
-public sealed class WhatsAppGraphApiClient(HttpClient httpClient, IOptions<WhatsAppOptions> options) : IWhatsAppSender
+public sealed class WhatsAppGraphApiClient(HttpClient httpClient, IOptions<WhatsAppOptions> options)
+    : IWhatsAppSender, IWhatsAppMediaDownloader
 {
     private const int MaxAttempts = 2;
 
@@ -72,6 +73,42 @@ public sealed class WhatsAppGraphApiClient(HttpClient httpClient, IOptions<Whats
         };
 
         return PostWithRetryAsync(body, cancellationToken);
+    }
+
+    public async Task<(byte[] Bytes, string MimeType)> DownloadAsync(
+        string mediaId, CancellationToken cancellationToken = default)
+    {
+        var lookupUrl = $"{options.Value.GraphApiVersion}/{mediaId}?phone_number_id={options.Value.PhoneNumberId}";
+        using var lookupResponse = await httpClient.GetAsync(lookupUrl, cancellationToken);
+        if (!lookupResponse.IsSuccessStatusCode)
+        {
+            var rawBody = await lookupResponse.Content.ReadAsStringAsync(cancellationToken);
+            var (errorCode, errorMessage) = TryParseMetaError(rawBody);
+            throw new WhatsAppApiException(lookupResponse.StatusCode, errorCode, errorMessage, rawBody);
+        }
+
+        var media = await lookupResponse.Content.ReadFromJsonAsync<MediaLookupResponse>(cancellationToken);
+        if (media?.Url is null)
+        {
+            throw new WhatsAppApiException(lookupResponse.StatusCode, null, "Media lookup returned no url.", "");
+        }
+
+        // The resolved url is a full absolute URL from Meta, not relative to our configured
+        // BaseAddress — the bearer token on this HttpClient still applies (same auth header for
+        // every request), so this is still "the same bearer token", just an absolute request.
+        using var downloadResponse = await httpClient.GetAsync(media.Url, cancellationToken);
+        downloadResponse.EnsureSuccessStatusCode();
+        var bytes = await downloadResponse.Content.ReadAsByteArrayAsync(cancellationToken);
+        return (bytes, media.MimeType ?? "application/octet-stream");
+    }
+
+    private sealed class MediaLookupResponse
+    {
+        [JsonPropertyName("url")]
+        public string? Url { get; set; }
+
+        [JsonPropertyName("mime_type")]
+        public string? MimeType { get; set; }
     }
 
     private async Task PostWithRetryAsync(object body, CancellationToken cancellationToken)

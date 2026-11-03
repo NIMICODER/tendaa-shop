@@ -29,9 +29,12 @@ logs/
 appsettings.*.local.json
 secrets.json
 
-# Local media saved during development (may contain receipts and voice notes)
-media/
-uploads/
+# Local media saved during development (may contain receipts and voice notes) — matches the
+# distinctively-named "media-storage" folder wherever `dotnet run`'s working directory puts it
+# (src/Tendaa.Web/media-storage/ in practice), without the earlier bare "media/"/"uploads/"
+# pattern that also silently matched real source directories (src/Tendaa.Agent/Media,
+# tests/Tendaa.Agent.Tests/Media) and excluded them from every commit.
+media-storage/
 
 # Frontend (web/) build output and caches
 node_modules/

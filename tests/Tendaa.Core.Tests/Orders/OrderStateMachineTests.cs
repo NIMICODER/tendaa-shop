@@ -15,6 +15,7 @@ public class OrderStateMachineTests
             { OrderStatus.Draft, OrderStatus.Cancelled, OrderActor.Agent },
             { OrderStatus.Draft, OrderStatus.Cancelled, OrderActor.Seller },
             { OrderStatus.AwaitingPayment, OrderStatus.PaymentReview, OrderActor.Agent },
+            { OrderStatus.AwaitingPayment, OrderStatus.PaymentReview, OrderActor.System },
             { OrderStatus.AwaitingPayment, OrderStatus.Cancelled, OrderActor.Agent },
             { OrderStatus.AwaitingPayment, OrderStatus.Cancelled, OrderActor.Seller },
             { OrderStatus.PaymentReview, OrderStatus.Confirmed, OrderActor.Seller },

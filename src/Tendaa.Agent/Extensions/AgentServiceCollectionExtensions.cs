@@ -1,4 +1,5 @@
 ﻿using System.ClientModel;
+using System.Net.Http.Headers;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
@@ -6,6 +7,7 @@ using Microsoft.Extensions.Options;
 using OpenAI;
 using OpenAI.Chat;
 using Tendaa.Agent.Context;
+using Tendaa.Agent.Media;
 using Tendaa.Agent.Tools;
 using Tendaa.Agent.Tracing;
 using Tendaa.Core.Configurations.ConfigModels;
@@ -61,6 +63,16 @@ public static class AgentServiceCollectionExtensions
         });
 
         services.AddScoped<IAgentTurnRunner, AgentTurnRunner>();
+
+        services.AddHttpClient<ITranscriber, Transcriber>((sp, client) =>
+        {
+            var options = sp.GetRequiredService<IOptions<MetaModelOptions>>().Value;
+            client.BaseAddress = new Uri(options.BaseUrl.TrimEnd('/') + "/");
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", options.ApiKey);
+        });
+
+        // Reuses the same singleton ChatClient as the ordering agent — no second Meta API client.
+        services.AddSingleton<IMediaAnalyzer, MediaAnalyzer>();
 
         return services;
     }

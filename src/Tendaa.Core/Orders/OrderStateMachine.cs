@@ -14,7 +14,10 @@ public static class OrderStateMachine
         {
             [(OrderStatus.Draft, OrderStatus.AwaitingPayment)] = [OrderActor.Agent],
             [(OrderStatus.Draft, OrderStatus.Cancelled)] = [OrderActor.Agent, OrderActor.Seller],
-            [(OrderStatus.AwaitingPayment, OrderStatus.PaymentReview)] = [OrderActor.Agent],
+            // System: PaymentVerifier's receipt check (Phase 4b) is deterministic code, not the
+            // model, moving the order on a matched receipt — same reasoning as the System actor
+            // already allowed below for Dispatched -> Delivered.
+            [(OrderStatus.AwaitingPayment, OrderStatus.PaymentReview)] = [OrderActor.Agent, OrderActor.System],
             [(OrderStatus.AwaitingPayment, OrderStatus.Cancelled)] = [OrderActor.Agent, OrderActor.Seller],
             [(OrderStatus.PaymentReview, OrderStatus.Confirmed)] = [OrderActor.Seller],
             [(OrderStatus.PaymentReview, OrderStatus.AwaitingPayment)] = [OrderActor.Seller],

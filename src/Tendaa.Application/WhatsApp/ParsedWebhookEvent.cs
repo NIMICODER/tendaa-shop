@@ -17,8 +17,22 @@ public sealed record ParsedBsuidChangeMessage(
     string WhatsAppMessageId, string Bsuid, string PreviousBsuid, string? NewPhone)
     : ParsedInboundMessage(WhatsAppMessageId, Bsuid);
 
-/// <summary>Anything not yet handled — non-text message types (voice, image: Phase 4) or an
-/// unrecognized system message type. Parsing never throws on these; the processor decides what,
-/// if anything, to do with them.</summary>
+/// <summary>A voice note. <see cref="MediaId"/> resolves to bytes via
+/// <c>IWhatsAppMediaDownloader</c>, then <c>ITranscriber</c> — see Phase 4a. Carries the same
+/// contact fields as <see cref="ParsedTextMessage"/> so a first-time voice note still resolves a
+/// full <c>Customer</c>, not a bare BSUID.</summary>
+public sealed record ParsedVoiceMessage(
+    string WhatsAppMessageId, string Bsuid, string MediaId, string? Phone, string? Name, string? Username)
+    : ParsedInboundMessage(WhatsAppMessageId, Bsuid);
+
+/// <summary>A customer-sent photo — a receipt, a product photo, or something else;
+/// <c>IMediaAnalyzer</c> decides which. See Phase 4b.</summary>
+public sealed record ParsedImageMessage(
+    string WhatsAppMessageId, string Bsuid, string MediaId, string? Caption,
+    string? Phone, string? Name, string? Username)
+    : ParsedInboundMessage(WhatsAppMessageId, Bsuid);
+
+/// <summary>Anything not yet handled — an unrecognized message or system message type. Parsing
+/// never throws on these; the processor decides what, if anything, to do with them.</summary>
 public sealed record ParsedUnsupportedMessage(string WhatsAppMessageId, string Bsuid, string? MessageType)
     : ParsedInboundMessage(WhatsAppMessageId, Bsuid);

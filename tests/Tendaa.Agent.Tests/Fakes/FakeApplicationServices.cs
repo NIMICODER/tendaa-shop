@@ -1,9 +1,11 @@
-﻿using Tendaa.Agent.Tools;
+using Tendaa.Agent.Tools;
 using Tendaa.Application.Common;
 using Tendaa.Application.Models;
 using Tendaa.Application.Services.Interfaces;
 using Tendaa.Core;
 using Tendaa.Core.Models.Entities;
+using Tendaa.Core.Models.Enums.Handoffs;
+using Tendaa.Core.Models.Enums.Orders;
 
 namespace Tendaa.Agent.Tests.Fakes;
 
@@ -37,6 +39,32 @@ public sealed class FakeProductService : IProductService
         LastProductId = productId;
         return Task.FromResult(DetailsResult);
     }
+
+    public TendaaResult<IReadOnlyList<ProductCatalogEntry>> CatalogResult { get; set; } =
+        TendaaResult<IReadOnlyList<ProductCatalogEntry>>.Success([]);
+
+    public Task<TendaaResult<IReadOnlyList<ProductCatalogEntry>>> GetCatalogAsync(
+        Guid shopId, CancellationToken cancellationToken = default)
+    {
+        LastShopId = shopId;
+        return Task.FromResult(CatalogResult);
+    }
+
+    public Task<TendaaResult<IReadOnlyList<ProductDashboardItem>>> ListForDashboardAsync(
+        Guid shopId, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Not used by OrderingTools tests.");
+
+    public Task<TendaaResult<ProductDashboardItem>> CreateAsync(
+        Guid shopId, ProductInput input, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Not used by OrderingTools tests.");
+
+    public Task<TendaaResult<ProductDashboardItem>> UpdateAsync(
+        Guid shopId, Guid productId, ProductInput input, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Not used by OrderingTools tests.");
+
+    public Task<TendaaResult> DeleteAsync(
+        Guid shopId, Guid productId, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Not used by OrderingTools tests.");
 }
 
 public sealed class FakeDeliveryService : IDeliveryService
@@ -54,6 +82,22 @@ public sealed class FakeDeliveryService : IDeliveryService
         LastArea = area;
         return Task.FromResult(FeeResult);
     }
+
+    public Task<TendaaResult<IReadOnlyList<DeliveryZoneSummary>>> ListZonesAsync(
+        Guid shopId, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Not used by OrderingTools tests.");
+
+    public Task<TendaaResult<DeliveryZoneSummary>> CreateZoneAsync(
+        Guid shopId, DeliveryZoneInput input, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Not used by OrderingTools tests.");
+
+    public Task<TendaaResult<DeliveryZoneSummary>> UpdateZoneAsync(
+        Guid shopId, Guid zoneId, DeliveryZoneInput input, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Not used by OrderingTools tests.");
+
+    public Task<TendaaResult> DeleteZoneAsync(
+        Guid shopId, Guid zoneId, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Not used by OrderingTools tests.");
 }
 
 public sealed class FakeShopService : IShopService
@@ -76,6 +120,14 @@ public sealed class FakeShopService : IShopService
     public Task<TendaaResult<Shop>> GetByPhoneNumberIdAsync(
         string phoneNumberId, CancellationToken cancellationToken = default) =>
         Task.FromResult(ByPhoneNumberIdResult);
+
+    public Task<TendaaResult<ShopSettings>> GetSettingsAsync(
+        Guid shopId, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Not used by OrderingTools tests.");
+
+    public Task<TendaaResult<ShopSettings>> UpdateAsync(
+        Guid shopId, ShopSettingsInput input, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Not used by OrderingTools tests.");
 }
 
 public sealed class FakeOrderService : IOrderService
@@ -139,6 +191,45 @@ public sealed class FakeOrderService : IOrderService
         LastCustomerId = customerId;
         return Task.FromResult(MyOrdersResult);
     }
+
+    public TendaaResult<ReceiptCheckResult> ReceiptCheckResult { get; set; } =
+        TendaaResult<ReceiptCheckResult>.Success(new ReceiptCheckResult(false, null, null, null));
+
+    public Task<TendaaResult<ReceiptCheckResult>> CheckReceiptAsync(
+        Guid shopId,
+        Guid customerId,
+        string mediaId,
+        decimal? extractedAmount,
+        DateOnly? transferDate,
+        string? reference,
+        double confidence,
+        string extractedFieldsJson,
+        CancellationToken cancellationToken = default)
+    {
+        LastShopId = shopId;
+        LastCustomerId = customerId;
+        return Task.FromResult(ReceiptCheckResult);
+    }
+
+    public Task<TendaaResult<OrderListPage>> ListAsync(
+        Guid shopId, OrderStatus? statusFilter, int page, int pageSize, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Not used by OrderingTools tests.");
+
+    public Task<TendaaResult<IReadOnlyList<OrderStatusCount>>> GetStatusCountsAsync(
+        Guid shopId, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Not used by OrderingTools tests.");
+
+    public Task<TendaaResult<OrderDetail>> GetDetailAsync(
+        Guid shopId, Guid orderId, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Not used by OrderingTools tests.");
+
+    public Task<TendaaResult<OrderDetail>> ConfirmPaymentAsync(
+        Guid shopId, Guid paymentProofId, string confirmedBy, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Not used by OrderingTools tests.");
+
+    public Task<TendaaResult<OrderDetail>> RejectPaymentAsync(
+        Guid shopId, Guid paymentProofId, string reason, string rejectedBy, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Not used by OrderingTools tests.");
 }
 
 public sealed class FakeHandoffService : IHandoffService
@@ -168,6 +259,18 @@ public sealed class FakeHandoffService : IHandoffService
     public Task<bool> HasOpenHandoffAsync(
         Guid shopId, Guid conversationId, CancellationToken cancellationToken = default) =>
         Task.FromResult(HasOpenHandoffResult);
+
+    public Task<TendaaResult<IReadOnlyList<HandoffListItem>>> ListAsync(
+        Guid shopId, HandoffStatus? statusFilter, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Not used by OrderingTools tests.");
+
+    public Task<TendaaResult<HandoffDetail>> GetDetailAsync(
+        Guid shopId, Guid handoffId, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Not used by OrderingTools tests.");
+
+    public Task<TendaaResult<HandoffDetail>> ResolveHandoffAsync(
+        Guid shopId, Guid handoffId, string resolvedBy, string? replyText, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Not used by OrderingTools tests.");
 }
 
 public sealed class FakeCustomerService : ICustomerService

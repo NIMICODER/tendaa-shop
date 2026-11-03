@@ -37,10 +37,26 @@ public sealed record WhatsAppMessage(
     [property: JsonPropertyName("from_user_id")] string? FromUserId,
     [property: JsonPropertyName("type")] string? Type,
     [property: JsonPropertyName("text")] WhatsAppTextBody? Text,
-    [property: JsonPropertyName("system")] WhatsAppSystem? System);
+    [property: JsonPropertyName("system")] WhatsAppSystem? System,
+    [property: JsonPropertyName("audio")] WhatsAppAudio? Audio,
+    [property: JsonPropertyName("image")] WhatsAppImage? Image);
 
 public sealed record WhatsAppTextBody(
     [property: JsonPropertyName("body")] string? Body);
+
+/// <summary>Confirmed Oct 2026 (CLAUDE.md's "WhatsApp Cloud API" section):
+/// developers.facebook.com's webhook reference for audio messages. `MimeType` for a voice note is
+/// `audio/ogg; codecs=opus`; `Voice` distinguishes a voice note from a shared audio file.</summary>
+public sealed record WhatsAppAudio(
+    [property: JsonPropertyName("id")] string? Id,
+    [property: JsonPropertyName("mime_type")] string? MimeType,
+    [property: JsonPropertyName("voice")] bool? Voice);
+
+/// <summary>Confirmed Oct 2026, same source as <see cref="WhatsAppAudio"/>.</summary>
+public sealed record WhatsAppImage(
+    [property: JsonPropertyName("id")] string? Id,
+    [property: JsonPropertyName("mime_type")] string? MimeType,
+    [property: JsonPropertyName("caption")] string? Caption);
 
 /// <summary>BSUID-change system message — see ARCHITECTURE.md "Customer identity" / CLAUDE.md's
 /// WhatsApp Cloud API section. <see cref="Type"/> is <c>user_changed_number</c> or

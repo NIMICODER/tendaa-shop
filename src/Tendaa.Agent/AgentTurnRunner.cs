@@ -5,6 +5,7 @@ using Tendaa.Agent.Tracing;
 using Tendaa.Application.Services.Interfaces;
 using Tendaa.Core.Configurations.ConfigModels;
 using Tendaa.Core.Models.Entities;
+using Tendaa.Core.Models.Enums.Conversations;
 
 namespace Tendaa.Agent;
 
@@ -22,6 +23,9 @@ public sealed class AgentTurnRunner(
         string? phone,
         Conversation conversation,
         string messageText,
+        MessageType inboundType = MessageType.Text,
+        string? language = null,
+        string? mediaId = null,
         CancellationToken cancellationToken = default)
     {
         requestContext.SetIdentity(shopId, customerId, phone, conversation.Id);
@@ -56,7 +60,8 @@ public sealed class AgentTurnRunner(
 
         await conversationService.SaveSessionAsync(agent, conversation, session, cancellationToken);
         await conversationService.SaveTurnAsync(
-            shopId, conversation.Id, messageText, replyText, trace.Entries, cancellationToken);
+            shopId, conversation.Id, messageText, replyText, trace.Entries,
+            inboundType, language, mediaId, cancellationToken);
 
         return replyText;
     }

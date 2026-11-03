@@ -1,5 +1,6 @@
 ﻿using System.Net.Http.Headers;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Tendaa.Agent;
@@ -18,6 +19,7 @@ public sealed record ChatResponse(string Reply);
 /// <see cref="IWebHostEnvironment.IsDevelopment"/> itself and returns 404 outside Development.</summary>
 [ApiController]
 [Route("dev")]
+[AllowAnonymous]
 public sealed class DevController(
     IModelPingService modelPingService,
     IShopService shopService,
@@ -67,7 +69,8 @@ public sealed class DevController(
             shop.Id, customer.Id, cancellationToken)).Data!;
 
         var reply = await agentTurnRunner.RunTurnAsync(
-            shop.Id, customer.Id, customer.PhoneNumber, conversation, request.Message, cancellationToken);
+            shop.Id, customer.Id, customer.PhoneNumber, conversation, request.Message,
+            cancellationToken: cancellationToken);
 
         return Ok(new ChatResponse(reply));
     }

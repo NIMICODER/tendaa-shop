@@ -3,6 +3,7 @@ using Tendaa.Application.Common;
 using Tendaa.Application.Models;
 using Tendaa.Application.Services.Interfaces;
 using Tendaa.Core.Models.Entities;
+using Tendaa.Core.Models.Enums.Conversations;
 
 namespace Tendaa.Agent.Tests.Fakes;
 
@@ -13,6 +14,9 @@ public sealed class FakeConversationService : IConversationService
 {
     public string? LastUserText { get; private set; }
     public string? LastAssistantText { get; private set; }
+    public MessageType? LastInboundType { get; private set; }
+    public string? LastLanguage { get; private set; }
+    public string? LastMediaId { get; private set; }
     public int LoadSessionCallCount { get; private set; }
 
     public Task<TendaaResult<Conversation>> GetOrCreateAsync(
@@ -36,10 +40,24 @@ public sealed class FakeConversationService : IConversationService
         string userText,
         string? assistantText,
         IReadOnlyList<ToolTraceEntry> toolTraces,
+        MessageType inboundType = MessageType.Text,
+        string? language = null,
+        string? mediaId = null,
         CancellationToken cancellationToken = default)
     {
         LastUserText = userText;
         LastAssistantText = assistantText;
+        LastInboundType = inboundType;
+        LastLanguage = language;
+        LastMediaId = mediaId;
         return Task.CompletedTask;
     }
+
+    public Task<TendaaResult<IReadOnlyList<ConversationListItem>>> ListForDashboardAsync(
+        Guid shopId, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Not used by AgentTurnRunner tests.");
+
+    public Task<TendaaResult<ConversationThread>> GetThreadAsync(
+        Guid shopId, Guid conversationId, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Not used by AgentTurnRunner tests.");
 }
