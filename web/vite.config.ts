@@ -16,6 +16,9 @@ export default defineConfig({
     outDir: path.resolve(rootDir, '../src/Tendaa.Web/wwwroot'),
     emptyOutDir: true,
   },
+  resolve: {
+    alias: { '@': path.resolve(rootDir, './src') },
+  },
   server: {
     proxy: {
       '/api': { target: backendDevUrl, changeOrigin: true },
