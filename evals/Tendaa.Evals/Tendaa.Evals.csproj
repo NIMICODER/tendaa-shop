@@ -1,12 +1,23 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Tendaa.Agent\Tendaa.Agent.csproj" />
+    <ProjectReference Include="..\..\src\Tendaa.Application\Tendaa.Application.csproj" />
     <ProjectReference Include="..\..\src\Tendaa.Core\Tendaa.Core.csproj" />
+    <ProjectReference Include="..\..\src\Tendaa.Infrastructure\Tendaa.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.14" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="10.0.0" />
   </ItemGroup>
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
+    <!-- Same id as Tendaa.Web: reads the same local `dotnet user-secrets` store (MetaModel:*,
+         WhatsApp:*), so evals run against the real model without any secret ever being typed,
+         read, or printed here. -->
+    <UserSecretsId>5b5b6808-57a6-4266-bbeb-0db8476548e9</UserSecretsId>
   </PropertyGroup>
 
 </Project>
