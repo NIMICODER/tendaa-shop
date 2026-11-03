@@ -204,8 +204,8 @@ than silently eating into Tuesday or Wednesday — evals (Phase 6) are judged to
 | 1 Domain and data | Done | Committed 3f33d10; restructure to own conventions in f06e162. |
 | 2 Agent core | Done | All Done-when items verified against real Muse Spark (flow B, D, G); committed adb2ff0. |
 | 3 WhatsApp | Done | Webhook signature verify, durable receipt, crash recovery, real order placed end to end through a real phone number. Committed c537229. |
-| 4a Voice notes | Built, not committed | ffmpeg conversion + Muse Voice Transcribe, full agent-turn integration, automated tests passing. Still needs a live voice-note test on a real phone. |
-| 4b Vision | Built, not committed | Receipt classify+extract+verify (moves order to PaymentReview in code, never the model), product-photo catalog match, both tested. Still needs live receipt/product-photo tests on a real phone. |
-| 5 Dashboard + deploy | Built, not committed | REST API, cookie auth, SignalR, all 6 pages plus a public landing page and a restyled login screen, all built and polished. Blocked on one thing: a missing EF Core migration (`dotnet ef migrations add` + `database update`, run by hand per project convention) before the dashboard's integration tests and a real deploy will work. Not deployed anywhere yet. |
-| 6 Evals | Not started | |
-| 7 Submission | Not started | |
+| 4a Voice notes | Done | ffmpeg conversion + Muse Voice Transcribe, full agent-turn integration, automated tests passing. Committed dce9fce. Still needs a live voice-note test on a real phone. |
+| 4b Vision | Done | Receipt classify+extract+verify (moves order to PaymentReview in code, never the model), product-photo catalog match, both tested. Committed dce9fce. Still needs live receipt/product-photo tests on a real phone. |
+| 5 Dashboard + deploy | Built, not deployed | REST API, cookie auth, SignalR, all 6 pages plus a public landing page and a restyled login screen, built and polished. Committed 7e2a4b4/5ec551a. EF Core migration applied, full suite green (344/344). Not deployed anywhere yet — blocked on hosting CLI/account access (task #129). |
+| 6 Evals | Done | Console app (`evals/Tendaa.Evals`) against the real model: order flow, prompt injection, Pidgin LLM-as-judge, handoff trigger, receipt verification (vision bypassed, flagged). 10/10 passing — the run itself caught two real Sqlite ORDER BY bugs, now fixed. Committed 4b36171/3686187. |
+| 7 Submission | Not started | README content, demo video, X post still to do. |
